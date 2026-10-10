@@ -17,21 +17,25 @@
 > برای MIUI: اگر نصب بلاک شد، *Settings → Privacy → Special permissions → Install unknown apps* را برای برنامهٔ دانلودکننده روشن کنید.
 > نسخه‌های بعدی همان امضا را دارند، پس **روی نسخهٔ قبلی نصب می‌شوند** و اطلاعات (لغت‌ها و تنظیمات) حفظ می‌شود.
 
-## ۲) ساخت و انتشار با GitHub (فقط چند کلیک)
-1. محتوای این پوشه را در ریشهٔ ریپوی `proudvocab` کامیت کنید (کنار `proudvocab-desktop`):
+## ۲) ساخت و انتشار با GitHub (کاملاً خودکار)
+1. محتوای این پوشه را در ریشهٔ ریپو کامیت کنید:
    ```
    .github/workflows/android.yml
    proudvocab-android/...
    ```
-2. **تست بیلد:** تب *Actions → Android APK → Run workflow*. بعد از چند دقیقه APK در بخش *Artifacts* است.
-3. **Release:** یک تگ بزنید و پوش کنید:
-   ```bash
-   git tag android-v1.0.0
-   git push origin android-v1.0.0
-   ```
-   ورک‌فلو APK امضاشده را می‌سازد، بررسی می‌کند (امضا، نام پکیج، minSdk 28) و خودش یک **GitHub Release** با APK می‌سازد.
-   (یا از *Run workflow* گزینهٔ `release` و `version` را پر کنید.)
+2. **هر پوشی روی شاخهٔ main/master** که به فایل‌های اپ دست بزند، خودش:
+   بیلد می‌گیرد ← APK را امضا و بررسی می‌کند ← **تگ می‌سازد** (`android-v1.0.<شماره‌ی اجرا>`، مثلاً `android-v1.0.7`) ← **Release** با APK و فایل `.sha256` منتشر می‌کند.
+   * نسخهٔ پایه از فایل `VERSION` می‌آید (`1.0` ← برای نسخهٔ ۲ آن را `2.0` کنید).
+   * اگر نمی‌خواهید Release ساخته شود، در پیام کامیت بنویسید `[skip release]`.
+   * Pull Request فقط بیلد می‌کند.
+3. دستی: تب *Actions → Android APK → Run workflow* (گزینهٔ `release` و `version`)، یا خودتان تگ بزنید: `git tag android-v2.0.0 && git push origin android-v2.0.0`.
 4. اگر ورک‌فلو قرمز شد: لاگ همان مرحله را ببینید و جدول «خطا ← علت ← راه‌حل» در [`CHECKLIST.md`](CHECKLIST.md) را نگاه کنید.
+   (برای ساخت Release لازم است در *Settings → Actions → General → Workflow permissions* گزینهٔ **Read and write permissions** فعال باشد.)
+
+### چرا فقط یک APK (arm64 / armv7 / x86)؟
+این برنامه **هیچ کد native (‎.so)‎ ندارد**: فقط Java + WebView. بنابراین یک APK همه‌کاره روی هر معماری (arm64-v8a، armeabi-v7a، x86، x86_64) اجرا می‌شود
+و POCO X3 Pro (arm64) هم همان را نصب می‌کند. APKهای جدا برای هر ABI فایل‌هایی کاملاً یکسان می‌شدند و فقط اشتباه‌گرفتن ایجاد می‌کردند.
+حجم حدود ۶۰۰ کیلوبایت است چون کتابخانهٔ خارجی/native ندارد (رابط وب ≈ ۴۷۰KB فشرده + کد Java + آیکون).
 
 ### امضا (Signing)
 یک کلید ثابت در `keystore/proudvocab-release.p12` است تا همهٔ نسخه‌ها یک امضا داشته باشند و روی هم نصب شوند.
@@ -81,7 +85,8 @@ proudvocab-android/
   keystore/                    کلید امضا
 ../.github/workflows/android.yml
 ```
-بازتولید رابط وب بعد از تغییر `proudvocab-desktop`: `node scripts/build-web.mjs` (CI خودش هم این کار را می‌کند).
+رابط وب آمادهٔ استفاده در `app/src/main/assets/www` کامیت شده است، پس این پوشه **به‌تنهایی** (بدون `proudvocab-desktop`) هم بیلد می‌شود.
+اگر `proudvocab-desktop` کنارش باشد و آن را تغییر دهید، `node scripts/build-web.mjs` رابط وب را دوباره تولید می‌کند (CI خودش هم این کار را می‌کند).
 
 ---
 

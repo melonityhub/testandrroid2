@@ -22,7 +22,16 @@ const OUT = path.join(ROOT, 'app', 'src', 'main', 'assets', 'www');
 const OVL = path.join(ROOT, 'web-overlay');
 
 if (!fs.existsSync(path.join(SRC, 'ext', 'background.js'))) {
-  console.error(`desktop renderer not found at ${SRC}`);
+  // The Android project is self-contained: the generated web bundle is committed in
+  // app/src/main/assets/www. Without the desktop sources next to it (e.g. a repo that only
+  // contains proudvocab-android) that ready-made bundle is used as is.
+  if (fs.existsSync(path.join(OUT, 'index.html')) && fs.existsSync(path.join(OUT, 'ext', 'background.js')) && !process.env.PV_REQUIRE_DESKTOP) {
+    console.log(`desktop renderer not found at ${SRC}`);
+    console.log('using the ready-made web bundle committed in app/src/main/assets/www (nothing regenerated)');
+    console.log('\nOK - 0 patch points applied (bundle already generated and checked in)');
+    process.exit(0);
+  }
+  console.error(`desktop renderer not found at ${SRC} and there is no committed bundle in ${OUT}`);
   process.exit(2);
 }
 
