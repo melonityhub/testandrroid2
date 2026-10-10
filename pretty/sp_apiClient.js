@@ -1,0 +1,192 @@
+var PV_CONFIG = {
+        apiUrl: "https://script.google.com/macros/s/AKfycbyQL_5IWBnSOfs-vnb7jD2F-qY-k4uAID2jniHzxYULChCUQ9IqkYaNYltcr8oM5PnaTw/exec"
+    },
+    PV_LICENSE_PUBLIC_KEY_PEM = "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA8jxoOhYxJ+OFlB31z/DA\nh4Eh8wO69/toZYtY3MP+1ODkYeyB8qMZQHsteAjqlqtswtY/5TXR1ltZCzvUl9pS\nZgujgBGozNZ3CRnSrkw4KQeZ2sT7GkX0KlBPXVZsoDZirRwaU1165No35p35ToR7\n2+yRGosOk2XnztIQ4GcXfeG4cUHWcNr22N0Lrt+Hs8akfR3zqti4hc0HKk+XemlQ\nLm9WvqGcrCRkZtVb3tQCY7e5rnKdv1OQQDYkbK1mWjpacxtwK4YuUmWIrIiMQcoy\n7Ar94u1AGo0tweZjYHErGiKx1XzsviWkimF5CzpH/MBHHBdsoh7XVFXk/+/h/kmY\niQIDAQAB\n-----END PUBLIC KEY-----";
+globalThis.PV_ApiClient = function() {
+    async function e() {
+        return new Promise(e => {
+            chrome.storage.local.get(["userId"], function(t) {
+                if (t.userId) e(t.userId);
+                else {
+                    let t;
+                    t = "undefined" != typeof crypto && "function" == typeof crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(e) {
+                        var t = 16 * Math.random() | 0;
+                        return ("x" == e ? t : 3 & t | 8).toString(16)
+                    }), chrome.storage.local.set({
+                        userId: t
+                    }, function() {
+                        e(t)
+                    })
+                }
+            })
+        })
+    }
+
+    function t(e) {
+        const t = atob(e),
+            n = new Uint8Array(t.length);
+        for (let e = 0; e < t.length; e++) n[e] = t.charCodeAt(e);
+        return n
+    }
+    let n = null;
+    async function a(e, a) {
+        if (!e || !e.payload || !e.signature) return null;
+        try {
+            const i = t(e.payload),
+                r = JSON.parse((new TextDecoder).decode(i));
+            if (r.userId !== a) return null;
+            if (!r.exp || Date.now() > r.exp) return null;
+            const s = await async function() {
+                if (n) return n;
+                const e = t(PV_LICENSE_PUBLIC_KEY_PEM.replace("-----BEGIN PUBLIC KEY-----", "").replace("-----END PUBLIC KEY-----", "").replace(/\s+/g, ""));
+                return n = await crypto.subtle.importKey("spki", e.buffer, {
+                    name: "RSASSA-PKCS1-v1_5",
+                    hash: "SHA-256"
+                }, !1, ["verify"]), n
+            }(), o = t(e.signature);
+            return await crypto.subtle.verify({
+                name: "RSASSA-PKCS1-v1_5"
+            }, s, o, i) ? r : null
+        } catch (e) {
+            return null
+        }
+    }
+    async function i(e, t) {
+        const n = await r();
+        if (!n.apiUrl) return {
+            success: !1,
+            message: "Google Apps Script API URL'si tanımlanmamış."
+        };
+        let a = "";
+        const i = globalThis.getGoogleAuthToken || ("function" == typeof getGoogleAuthToken ? getGoogleAuthToken : null);
+        if (i) try {
+            a = await i(!1)
+        } catch (e) {}
+        const s = {
+            action: e,
+            data: t
+        };
+        a && (s.accessToken = a);
+        try {
+            const e = await fetch(n.apiUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "text/plain;charset=utf-8"
+                },
+                body: JSON.stringify(s)
+            });
+            if (!e.ok) throw new Error(`HTTP Hata! Durum: ${e.status}`);
+            return await e.json()
+        } catch (e) {
+            return console.debug("[PV-ApiClient] Sunucu bağlantı durumu:", e.message || e), {
+                success: !1,
+                message: "Sunucu bağlantı hatası: " + (e.message || e)
+            }
+        }
+    }
+
+    function r() {
+        return new Promise(e => {
+            chrome.storage.local.get(["customApiUrl", "customApiSecret"], function(t) {
+                e({
+                    apiUrl: t.customApiUrl || PV_CONFIG.apiUrl,
+                    apiSecret: t.customApiSecret || PV_CONFIG.apiSecret
+                })
+            })
+        })
+    }
+    async function s(e) {
+        const t = void 0 !== e.isPremium ? e.isPremium : "FREE" !== e.licenseType && "ACTIVE" === e.status,
+            n = {
+                licenseType: e.licenseType || "FREE",
+                licenseStatus: e.status || "FREE_USER",
+                licenseExpiration: e.expirationDate || "",
+                dailyUsage: void 0 !== e.dailyUsage ? e.dailyUsage : 0,
+                lastLicenseCheck: Date.now(),
+                isPremium: t,
+                licenseToken: e.licenseToken || null
+            };
+        return new Promise(e => {
+            chrome.storage.local.get({
+                googleSyncEmail: "",
+                googleSyncEnabled: !1
+            }, a => {
+                t && a.googleSyncEmail && (n.googleSyncEnabled = !0), chrome.storage.local.set(n, e)
+            })
+        })
+    }
+    async function o() {
+        const t = await e();
+        return new Promise(e => {
+            chrome.storage.local.get(["isPremium", "licenseType", "licenseExpiration", "licenseToken"], async n => {
+                const i = !0 === n.isPremium,
+                    r = n.licenseType || "FREE";
+                if (!(i || "FREE" !== r && r)) return void e(!0);
+                const s = await a(n.licenseToken, t);
+                if (!s) return void e(!1);
+                const o = s.isPremium === i && s.licenseType === r && (s.expirationDate || "") === (n.licenseExpiration || "");
+                e(o)
+            })
+        })
+    }
+    let c = !1;
+    return {
+        getOrCreateUserId: e,
+        registerUser: async function(t = "") {
+            const n = await e(),
+                a = await i("register", {
+                    userId: n,
+                    email: t,
+                    platform: "extension"
+                });
+            return a.success && a.data && await s(a.data), a
+        },
+        checkLicense: async function(t = null) {
+            const n = await e();
+            let a = t;
+            if (!a) {
+                a = (await new Promise(e => chrome.storage.local.get({
+                    googleSyncEmail: ""
+                }, e))).googleSyncEmail || ""
+            }
+            const r = await i("check-license", {
+                userId: n,
+                email: a,
+                platform: "extension"
+            });
+            return r.success && r.data && await s(r.data), r
+        },
+        syncUsage: async function(t) {
+            const n = await e(),
+                a = await i("sync-usage", {
+                    userId: n,
+                    count: t,
+                    platform: "extension"
+                });
+            return a.success && a.data && await s(a.data), a
+        },
+        getEffectiveConfig: r,
+        verifyLicenseState: o,
+        enforceLicenseIntegrity: async function() {
+            return c || await o() || (c = !0, console.warn("[PV-Security] Yerel lisans bütünlüğü doğrulanamadı. Lisans güvenli şekilde FREE olarak sıfırlandı."), await new Promise(e => {
+                chrome.storage.local.set({
+                    isPremium: !1,
+                    licenseType: "FREE",
+                    licenseStatus: "FREE_USER",
+                    licenseExpiration: "",
+                    licenseToken: null
+                }, e)
+            }), c = !1), !0
+        },
+        isPremiumVerified: async function() {
+            if (!await o()) return !1;
+            const e = await new Promise(e => {
+                chrome.storage.local.get({
+                    isPremium: !1,
+                    licenseType: "FREE"
+                }, e)
+            });
+            return !0 === e.isPremium || e.licenseType && "FREE" !== e.licenseType
+        }
+    }
+}();

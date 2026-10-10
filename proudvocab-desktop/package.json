@@ -1,0 +1,79 @@
+{
+  "name": "proudvocab-desktop",
+  "productName": "ProudVocab Desktop",
+  "version": "1.0.0",
+  "description": "Desktop port of the ProudVocab extension: learn vocabulary from LOCAL video files with your own SRT subtitles.",
+  "main": "src/main/main.js",
+  "author": "ProudVocab Desktop",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "vendor": "node scripts/vendor-ext.mjs",
+    "start": "electron .",
+    "smoke": "electron . --smoke",
+    "sample": "node scripts/make-sample.mjs",
+    "test": "node --test test/*.test.mjs",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win --x64",
+    "dist:win:portable": "electron-builder --win portable --x64"
+  },
+  "devDependencies": {
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "app.proudvocab.desktop",
+    "productName": "ProudVocab Desktop",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "package.json",
+      "src/main/**/*",
+      "src/preload/**/*",
+      "src/renderer/**/*",
+      "samples/**/*"
+    ],
+    "asar": true,
+    "compression": "normal",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "artifactName": "ProudVocab-Desktop-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ProudVocab Desktop",
+      "deleteAppDataOnUninstall": false
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Education",
+      "icon": "build/icon.png",
+      "artifactName": "ProudVocab-Desktop-${version}.${ext}"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.education",
+      "icon": "build/icon.png"
+    }
+  }
+}

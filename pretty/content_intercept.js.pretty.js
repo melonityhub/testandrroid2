@@ -1,0 +1,1131 @@
+! function() {
+    "use strict";
+    const e = {
+        log: () => {},
+        warn: window.console.warn.bind(window.console),
+        error: window.console.error.bind(window.console)
+    };
+
+    function t(e, t) {
+        window.postMessage({
+            source: "primevocab-main",
+            type: e,
+            detail: t
+        }, "*")
+    }
+    window.__primevocab_subtitles || (window.__primevocab_subtitles = {}), window.__primevocab_episode_info || (window.__primevocab_episode_info = {}), window.addEventListener("message", e => {
+        if (e.source === window && e.origin === window.location.origin && e.data && "primevocab-isolated" === e.data.source) {
+            const {
+                type: t,
+                detail: i
+            } = e.data;
+            window.dispatchEvent(new CustomEvent(t, {
+                detail: i
+            }))
+        }
+    }), document.addEventListener("PvRequestNetflixMeta", function(e) {
+        const t = e.detail,
+            i = document.documentElement.getAttribute("data-pv-netflix-req-id"),
+            n = t || (i ? parseInt(i, 10) : null);
+        let r = null;
+        try {
+            const e = window.netflix?.appContext?.state?.graphqlClient?.cache?.data?.data;
+            if (e && n) {
+                const t = e['Episode:{"videoId":' + n + "}"],
+                    i = t?.number ?? null;
+                if (t?.parentSeason?.__ref) {
+                    const n = e[t.parentSeason.__ref];
+                    null != n?.number && (r = {
+                        seasonNumber: n.number,
+                        episodeNumber: i
+                    })
+                }
+                if (!r) {
+                    const t = 'Episode:{"videoId":' + n + "}";
+                    for (const n of Object.keys(e)) {
+                        if (!n.startsWith("Season:")) continue;
+                        const a = e[n];
+                        if (null == a?.number) continue;
+                        const s = a?.episodes?.edges;
+                        if (!s?.length) continue;
+                        if (s.some(e => e?.node?.__ref === t)) {
+                            r = {
+                                seasonNumber: a.number,
+                                episodeNumber: i
+                            };
+                            break
+                        }
+                    }
+                }
+            }
+            if (!r && n) {
+                const e = window.netflix?.appContext?.state?.pathEvaluator,
+                    t = "function" == typeof e?.getCache ? e.getCache() : e?._cache || e?._root?.cache,
+                    i = t?.videos?.[n];
+                if (i) {
+                    const e = i.summary?.value || i.summary;
+                    e && void 0 !== e.season && void 0 !== e.episode && (r = {
+                        seasonNumber: e.season,
+                        episodeNumber: e.episode
+                    })
+                }
+            }
+        } catch (e) {}
+        document.documentElement.setAttribute("data-pv-netflix-meta", JSON.stringify(r || {}))
+    });
+    const i = window.fetch.bind(window);
+    let n = "tr",
+        r = !1,
+        a = null,
+        s = !0,
+        o = {},
+        l = null;
+
+    function c(e) {
+        if (!e) return null;
+        const t = e.trim();
+        if (t.startsWith("<?xml") || t.includes("<tt")) try {
+            const e = t.match(/<tt\s+[^>]*?(?:xml:)?lang="([^"]+)"/i);
+            if (e) return $(e[1].split("-")[0])
+        } catch (e) {}
+        if (t.includes("WEBVTT")) {
+            const e = t.match(/^Language:\s*([a-z]{2,3})/im);
+            if (e) return $(e[1])
+        }
+        return null
+    }
+
+    function u(e) {
+        if (!e) return null;
+        const t = e.ttDownloadables || e.downloadables || {},
+            i = ["simplesdh", "imsc1.1", "dfxp-ls-sdh", "nflx-cmisc", "webvtt-lssdh", "webvtt-lssdh-ios8", "webvtt-lssdh-ios9"];
+        for (const e of i) {
+            const i = t[e];
+            if (i) {
+                let t = null;
+                if ("string" == typeof i) t = i;
+                else if (Array.isArray(i.urls) && i.urls.length > 0 && i.urls[0].url) t = i.urls[0].url;
+                else if (i.downloadUrls) {
+                    const e = Object.values(i.downloadUrls);
+                    e.length > 0 && (t = e[0])
+                }
+                if (t) return {
+                    url: t,
+                    format: e
+                }
+            }
+        }
+        for (const e in t) {
+            const i = t[e];
+            if (i) {
+                let t = null;
+                if ("string" == typeof i) t = i;
+                else if (Array.isArray(i.urls) && i.urls.length > 0 && i.urls[0].url) t = i.urls[0].url;
+                else if (i.downloadUrls) {
+                    const e = Object.values(i.downloadUrls);
+                    e.length > 0 && (t = e[0])
+                }
+                if (t) return {
+                    url: t,
+                    format: e
+                }
+            }
+        }
+        return null
+    }
+
+    function d(e, t = 0) {
+        if (!e || "object" != typeof e || t > 3) return null;
+        const i = ["bcp47", "languageCode", "language", "code", "id", "locale", "lang"];
+        for (const t of i)
+            if ("string" == typeof e[t] && e[t].length >= 2 && e[t].length <= 8) return e[t];
+        for (const [t, i] of Object.entries(e)) {
+            const e = t.toLowerCase();
+            if ("string" == typeof i && i.length >= 2 && i.length <= 8 && (e.includes("bcp") || e.includes("lang") || e.includes("code") || e.includes("locale"))) return i
+        }
+        for (const [i, n] of Object.entries(e))
+            if (n && "object" == typeof n) {
+                const e = d(n, t + 1);
+                if (e) return e
+            } return null
+    }
+
+    function f(e, t = 0) {
+        if (!e || "object" != typeof e || t > 3) return null;
+        const i = ["displayName", "name", "languageDescription", "description"];
+        for (const t of i)
+            if ("string" == typeof e[t] && e[t].length > 0) return e[t];
+        for (const [t, i] of Object.entries(e)) {
+            const e = t.toLowerCase();
+            if ("string" == typeof i && i.length > 0 && (e.includes("name") || e.includes("desc") || e.includes("label") || e.includes("title"))) return i
+        }
+        for (const [i, n] of Object.entries(e))
+            if (n && "object" == typeof n) {
+                const e = f(n, t + 1);
+                if (e) return e
+            } return null
+    }
+
+    function p(e) {
+        if (!e) return {
+            langCode: "",
+            displayName: ""
+        };
+        let t = d(e),
+            i = f(e);
+        return {
+            langCode: (t || "").trim(),
+            displayName: (i || "").trim()
+        }
+    }
+
+    function g(e) {
+        if (!e || "object" != typeof e) return null;
+        if ("function" == typeof e.getManifest) try {
+            const t = e.getManifest(),
+                i = t?.timedtexttracks || t?.textTracks;
+            if (Array.isArray(i) && i.length > 0) return i
+        } catch (e) {}
+        if ("function" == typeof e.getTimedTextTrackList) try {
+            const t = e.getTimedTextTrackList();
+            if (Array.isArray(t) && t.length > 0) return t
+        } catch (e) {}
+        if ("function" == typeof e.getTextTrackList) try {
+            const t = e.getTextTrackList();
+            if (Array.isArray(t) && t.length > 0) return t
+        } catch (e) {}
+        return Array.isArray(e.timedtexttracks) && e.timedtexttracks.length > 0 ? e.timedtexttracks : Array.isArray(e.textTracks) && e.textTracks.length > 0 ? e.textTracks : null
+    }
+
+    function m(i) {
+        try {
+            const n = window.netflix,
+                r = n?.appContext?.state?.playerApp?.getAPI?.();
+            if (!r) return e.log("[PV-intercept] Netflix player API erişilemez"), !1;
+            const a = r.videoPlayer?.getAllPlayerSessionIds?.() || [];
+            if (!a.length) return e.log("[PV-intercept] Netflix: aktif session yok"), !1;
+            let s = null;
+            const o = window.location.href.match(/\/watch\/(\d+)/),
+                c = o ? o[1] : null;
+            if (c && "function" == typeof r.videoPlayer.getVideoPlayerBySessionId)
+                for (const t of a) try {
+                    const i = r.videoPlayer.getVideoPlayerBySessionId(t);
+                    if ((i && "function" == typeof i.getMovieId ? String(i.getMovieId()) : null) === c || t.includes(c)) {
+                        s = i, e.log("[PV-intercept] Netflix: Oynatıcı session eşleşti:", t);
+                        break
+                    }
+                } catch (e) {}
+            if (s || "function" != typeof r.videoPlayer.getVideoPlayerBySessionId || (s = r.videoPlayer.getVideoPlayerBySessionId(a[0])), !s) return !1;
+            if (window.__primevocab_subtitles[i] && window.__primevocab_subtitles[i].size > 0) return e.log(`[PV-intercept] ${i} zaten mevcut.`), !0;
+            const d = g(s);
+            if (d) {
+                const t = function(e, t) {
+                    if (!Array.isArray(e)) return null;
+                    const i = e.filter(e => {
+                        if (!e || e.isNoneTrack) return !1;
+                        const i = p(e);
+                        if ($(i.langCode.split("-")[0]) === t) return !0;
+                        if (i.langCode.split("-")[0].toLowerCase().trim() === t) return !0;
+                        const n = e.trackId || e.id || "";
+                        return !(!n || !(n.includes(`;${t};`) || n.includes(`-${t}-`) || n.includes(`_${t}_`)))
+                    });
+                    return 0 === i.length ? null : u(i.find(e => {
+                        const t = p(e),
+                            i = e.trackId || e.id || "";
+                        return !(e.isForced || e.isForcedNarrative || e.isForcedNarrativeTrack || i && i.includes("forced") || t.displayName && t.displayName.toLowerCase().includes("kapalı") || e.languageDescription && e.languageDescription.toLowerCase().includes("kapalı") || e.displayName && e.displayName.toLowerCase().includes("kapalı"))
+                    }) || i[0])
+                }(d, i);
+                if (t && t.url) return e.log(`[PV-intercept] Netflix: ${i} altyazısı hafızadan sessizce bulundu (Format: ${t.format})`), L(t.url, i), !0
+            }
+            e.log(`[PV-intercept] Netflix: Hafızada ${i} URL'i bulunamadı. Sessizce dil değiştirilip geri yükleniyor...`);
+            const f = s.getTimedTextTrackList || s.getTextTrackList,
+                m = "function" == typeof f ? f.call(s) : g(s) || [];
+            if (!Array.isArray(m) || 0 === m.length) return e.log("[PV-intercept] Netflix: Oynatıcı track listesi boş veya alınamadı."), !1;
+            const _ = m.find(e => {
+                if (!e || e.isNoneTrack) return !1;
+                const t = p(e),
+                    n = $(t.langCode.split("-")[0]);
+                if (n === i) return !0;
+                if (!n) {
+                    const n = (t.displayName || e.displayName || e.languageDescription || "").toLowerCase();
+                    if ("tr" === i && (n.includes("türk") || n.includes("turk") || n.includes("turkish") || n.includes("türkisch") || n.includes("turco") || n.includes("turque"))) return !0;
+                    if ("en" === i && (n.includes("ingiliz") || n.includes("english") || n.includes("englisch") || n.includes("inglés") || n.includes("anglais"))) return !0;
+                    if ("es" === i && (n.includes("ispanyol") || n.includes("spanish") || n.includes("español") || n.includes("spanisch") || n.includes("espagnol"))) return !0;
+                    if ("de" === i && (n.includes("almanca") || n.includes("german") || n.includes("deutsch") || n.includes("alemán") || n.includes("allemand"))) return !0;
+                    if ("fr" === i && (n.includes("fransız") || n.includes("french") || n.includes("français") || n.includes("französisch") || n.includes("francés"))) return !0
+                }
+                const r = e.trackId || e.id || "";
+                return !(!r || !(r.includes(`;${i};`) || r.includes(`-${i}-`) || r.includes(`_${i}_`)))
+            });
+            e.log("[PV-intercept] Netflix: Bulunan track listesi:", m.map(e => {
+                const t = p(e);
+                return {
+                    id: e.trackId || e.id || "",
+                    lang: t.langCode,
+                    name: t.displayName
+                }
+            }));
+            try {
+                e.log("[PV-intercept] Netflix: Detayli track listesi JSON:", JSON.stringify(m.map(e => ({
+                    id: e.trackId || e.id,
+                    keys: Object.keys(e),
+                    language: e.language,
+                    bcp47: e.bcp47,
+                    languageCode: e.languageCode,
+                    displayName: e.displayName,
+                    languageDescription: e.languageDescription,
+                    isNoneTrack: e.isNoneTrack
+                }))))
+            } catch (t) {
+                e.log("[PV-intercept] Netflix: Detailed tracks log failed:", t.message)
+            }
+            const w = _ ? _.trackId || _.id : null;
+            e.log("[PV-intercept] Netflix: Hedef dil:", i, "Eşleşen track:", w || "YOK");
+            const y = "function" == typeof s.getTimedTextTrack ? s.getTimedTextTrack() : m.find(e => e.selected || e.isTypeActive),
+                b = s.setTimedTextTrack || s.setTextTrack,
+                h = y ? y.trackId || y.id : null;
+            if (_ && y && w !== h) {
+                const n = p(y),
+                    r = p(_);
+                e.log(`[PV-intercept] Netflix: Arka planda altyazı yükleme tetikleniyor. ${n.langCode} -> ${r.langCode}`), t("__primevocab_download_status", {
+                    downloading: !0
+                }), l = i, "function" == typeof b ? b.call(s, _) : e.warn("[PV-intercept] Netflix setTimedTextTrack method not found on player.");
+                const a = Date.now(),
+                    o = setInterval(() => {
+                        const r = window.__primevocab_subtitles[i] && window.__primevocab_subtitles[i].size > 0,
+                            c = Date.now() - a;
+                        if (r || c > 2e3) {
+                            clearInterval(o), e.log(`[PV-intercept] Netflix: Altyazı çekildi veya zaman aşımına uğradı (${c}ms). Geri yükleme başlatılıyor...`);
+                            let i = 0;
+                            const r = setInterval(() => {
+                                i++;
+                                try {
+                                    const t = s.getTimedTextTrack();
+                                    (t ? t.trackId || t.id : null) === h ? (clearInterval(r), e.log(`[PV-intercept] Netflix: Orijinal altyazı başarıyla geri yüklendi: ${n.langCode}`)) : (e.log(`[PV-intercept] Netflix: Geri yükleme deneniyor (Deneme #${i})...`), b.call(s, y))
+                                } catch (t) {
+                                    e.error("[PV-intercept] Netflix geri yükleme hatası:", t)
+                                }
+                                i >= 15 && clearInterval(r)
+                            }, 100);
+                            setTimeout(() => {
+                                t("__primevocab_download_status", {
+                                    downloading: !1
+                                }), l = null
+                            }, 500)
+                        }
+                    }, 50);
+                return !0
+            }
+            return !1
+        } catch (t) {
+            return l = null, e.log("[PV-intercept] Netflix subtitle tetikleme hatası:", t.message), !1
+        }
+    }
+    window.__primevocab_debug = {
+        get trackMap() {
+            return o
+        },
+        get targetLang() {
+            return n
+        },
+        get dualEnabled() {
+            return r
+        },
+        get subtitles() {
+            return window.__primevocab_subtitles
+        },
+        get pendingLang() {
+            return l
+        },
+        triggerDownload: e => m(e || n),
+        fetchForLang(t) {
+            o[t] ? (e.log(`[PV-DEBUG] ${t} için ${o[t].length} track bulundu, çekiliyor...`), o[t].forEach(i => {
+                e.log(`[PV-DEBUG] URL: ${i.url}`), L(i.url, t, !0)
+            })) : e.log(`[PV-DEBUG] trackMap'te ${t} yok. Mevcut diller:`, Object.keys(o))
+        }
+    }, window.addEventListener("__primevocab_clear_main_subtitles", () => {
+        window.__primevocab_subtitles = {}, o = {}, V.clear(), e.log("[PV-intercept] Main world subtitles and track map cleared.")
+    }), window.addEventListener("message", i => {
+        if (i.source !== window || i.origin !== window.location.origin) return;
+        if ("primevocab-isolated" !== i.data?.source) return;
+        const {
+            type: s,
+            detail: l
+        } = i.data || {};
+        if ("__primevocab_set_target_lang" === s) {
+            if (n = l?.lang || "tr", r = l?.dual ?? !1, e.log(`[PV-intercept] Target lang updated to: ${n}, dualEnabled: ${r}`), r && n && (a && h(a, n), window.location.hostname.includes("netflix.com")))
+                if (o[n] && o[n].length > 0)
+                    for (const e of o[n]) L(e.url, n);
+                else m(n)
+        } else "__primevocab_set_preferred_source_lang" === s ? window.__primevocab_preferred_source_lang = l?.lang || null : "__primevocab_set_youtube_lang" === s ? function(i, n) {
+            if (!i) return;
+            const r = i.toLowerCase().trim().slice(0, 2),
+                a = ++_,
+                s = (e, i) => {
+                    a === _ && t("__primevocab_yt_lang_result", {
+                        lang: r,
+                        ok: e,
+                        reason: i,
+                        reqId: n ?? null
+                    })
+                };
+            let o = 0,
+                l = !1;
+            const c = () => {
+                if (a === _) try {
+                    const t = document.getElementById("movie_player") || document.querySelector(".html5-video-player");
+                    if (!t || "function" != typeof t.getOption || "function" != typeof t.setOption) return ++o < 20 ? void setTimeout(c, 200) : s(!1, "no-player");
+                    if (y(t) === r) return s(!0, "already-active");
+                    if ("function" == typeof t.loadModule) try {
+                        t.loadModule("captions")
+                    } catch (e) {}
+                    const i = t.getOption("captions", "tracklist");
+                    if (!Array.isArray(i) || 0 === i.length) {
+                        if (!l && o >= 3) {
+                            const e = document.querySelector(".ytp-subtitles-button");
+                            e && "false" === e.getAttribute("aria-pressed") && (l = !0, e.click())
+                        }
+                        return ++o < 20 ? void setTimeout(c, 200) : s(!1, "no-tracklist")
+                    }
+                    const n = e => "asr" === e.kind || (e.vssId || "").toLowerCase().startsWith("a."),
+                        u = i.find(e => w(e.languageCode, r) && !n(e)) || i.find(e => w(e.languageCode, r));
+                    if (u) t.setOption("captions", "track", u), e.log("[PV-intercept-YT] Direct track selected in MAIN world:", u.languageCode, u.kind || "");
+                    else {
+                        const a = i.find(e => e.is_default && !n(e)) || i.find(e => !n(e)) || i[0],
+                            s = t.getOption("captions", "translationLanguages");
+                        let o = Array.isArray(s) ? s.find(e => w(e.languageCode, r)) : null;
+                        o || (o = {
+                            languageCode: r,
+                            languageName: r
+                        }), t.setOption("captions", "track", {
+                            ...a,
+                            translationLanguage: o
+                        }), e.log("[PV-intercept-YT] Auto-translate applied in MAIN world:", a.languageCode, ">>", o.languageCode)
+                    }
+                    setTimeout(() => {
+                        if (a !== _) return;
+                        const e = y(t);
+                        s(e === r, e === r ? "applied" : "verify-failed:" + e)
+                    }, 700)
+                } catch (t) {
+                    e.warn("[PV-intercept-YT] applyYoutubeLanguage error:", t), s(!1, "error")
+                }
+            };
+            c()
+        }(l?.lang, l?.reqId) : "__primevocab_request_subtitles" === s && r && n && a && h(a, n)
+    });
+    let _ = 0;
+    const w = (e, t) => {
+        const i = (e || "").toLowerCase();
+        return i === t || i.startsWith(t + "-") || i.startsWith(t + "_")
+    };
+
+    function y(e) {
+        try {
+            const t = e.getOption("captions", "track") || {};
+            if (!t.languageCode) return "";
+            return (t.translationLanguage && t.translationLanguage.languageCode || t.languageCode).toLowerCase().slice(0, 2)
+        } catch (e) {
+            return ""
+        }
+    }
+    let b = !0;
+
+    function h(n, r, a) {
+        if (b && n && r) try {
+            const s = new URL(n.startsWith("http") ? n : window.location.origin + n),
+                o = (s.searchParams.get("lang") || "").toLowerCase().slice(0, 2),
+                l = r.toLowerCase().trim().slice(0, 2);
+            o && o === l ? s.searchParams.delete("tlang") : s.searchParams.set("tlang", l), s.searchParams.set("fmt", "json3");
+            const c = s.toString();
+            if (V.has(c)) return;
+            V.add(c);
+            const u = {};
+            a && (a.headers && (u.headers = a.headers), a.credentials && (u.credentials = a.credentials), a.mode && (u.mode = a.mode), a.cache && (u.cache = a.cache), a.redirect && (u.redirect = a.redirect), a.referrer && (u.referrer = a.referrer)), e.log(`[PV-intercept] Proactively fetching YouTube translation for ${l}...`), i(c, u).then(e => e.ok ? e.text() : null).then(i => {
+                if (!i) return;
+                let n = null;
+                if (i.trim().startsWith("{")) try {
+                    n = x(JSON.parse(i))
+                } catch (e) {} else n = P(i);
+                if (n && n.size > 0) {
+                    const i = l;
+                    window.__primevocab_subtitles[i] || (window.__primevocab_subtitles[i] = new Map), n.forEach((e, t) => window.__primevocab_subtitles[i].set(t, e));
+                    const r = window.__primevocab_subtitles[i].size;
+                    t("__primevocab_track_ready", {
+                        lang: i,
+                        count: r,
+                        cues: Array.from(window.__primevocab_subtitles[i].entries())
+                    }), e.log(`[PV-intercept] ✓ YouTube translation (${i}) loaded: +${n.size} cues (total: ${r})`)
+                }
+            }).catch(t => e.log("[PV-intercept] Auto-translate fetch failed:", t))
+        } catch (t) {
+            e.log("[PV-intercept] Auto-translate build failed:", t)
+        }
+    }
+
+    function v(e, t) {
+        try {
+            return new URL(e).searchParams.get(t)
+        } catch (i) {
+            const n = e.match(new RegExp("[?&]" + t + "=([^&#]*)"));
+            return n ? decodeURIComponent(n[1]) : null
+        }
+    }
+
+    function k(e) {
+        return "string" != typeof e ? "" : e.replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")
+    }
+
+    function x(e) {
+        const t = new Map;
+        return e && e.events ? (e.events.forEach(e => {
+            if (!e.segs || 0 === e.segs.length) return;
+            const i = (e.tStartMs || 0) / 1e3,
+                n = (e.dDurationMs || 0) / 1e3;
+            let r = e.segs.map(e => e.utf8 || "").join("").replace(/\s+/g, " ").trim();
+            r = k(r), r && t.set(i, {
+                text: r,
+                end: i + n
+            })
+        }), t) : t
+    }
+
+    function P(e) {
+        const t = new Map;
+        try {
+            const i = /<text\s+([^>]*?)>([\s\S]*?)<\/text>/gi;
+            let n;
+            for (; null !== (n = i.exec(e));) {
+                const e = n[1],
+                    i = n[2],
+                    r = e.match(/start="([^"]*?)"/i),
+                    a = e.match(/dur="([^"]*?)"/i),
+                    s = parseFloat(r ? r[1] : "0"),
+                    o = parseFloat(a ? a[1] : "0");
+                let l = i.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+                l = k(l), !isNaN(s) && l && t.set(s, {
+                    text: l,
+                    end: s + o
+                })
+            }
+        } catch (e) {}
+        return t
+    }
+
+    function T(e) {
+        try {
+            const t = new Map,
+                i = /<p\s+([^>]*?)>([\s\S]*?)<\/p>/gi;
+            let n;
+            for (; null !== (n = i.exec(e));) {
+                const e = n[1],
+                    i = n[2],
+                    r = e.match(/begin="([^"]*?)"/i),
+                    a = e.match(/end="([^"]*?)"/i),
+                    s = e.match(/dur="([^"]*?)"/i),
+                    o = r ? r[1] : "",
+                    l = a ? a[1] : "",
+                    c = s ? s[1] : "";
+                let u = i.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+                if (u = k(u), !o || !u) continue;
+                const d = N(o);
+                let f = 0;
+                f = l ? N(l) : c ? d + N(c) : d + 5, isNaN(d) || isNaN(f) || t.set(d, {
+                    text: u,
+                    end: f
+                })
+            }
+            return t.size ? t : null
+        } catch (e) {
+            return null
+        }
+    }
+
+    function N(e) {
+        if (!e) return 0;
+        if ((e = e.replace(",", ".").toLowerCase().trim()).endsWith("t")) return parseFloat(e) / 1e7;
+        if (e.endsWith("ms")) return parseFloat(e) / 1e3;
+        if (e.endsWith("s")) return parseFloat(e);
+        if (e.endsWith("h")) return 3600 * parseFloat(e);
+        if (e.endsWith("m")) return 60 * parseFloat(e);
+        const t = e.split(":");
+        return 3 === t.length ? 3600 * +t[0] + 60 * +t[1] + parseFloat(t[2]) : 2 === t.length ? 60 * +t[0] + parseFloat(t[1]) : parseFloat(e)
+    }
+    window.addEventListener("__primevocab_set_target_lang", t => {
+        if (n = t.detail?.lang || "tr", r = t.detail?.dual ?? !1, b = t.detail?.autoTranslateFallback ?? !0, r && n && b) {
+            if (a) {
+                window.__primevocab_subtitles[n] && window.__primevocab_subtitles[n].size > 0 || h(a, n)
+            }
+            if (window.location.hostname.includes("netflix.com")) {
+                if (!(window.__primevocab_subtitles[n] && window.__primevocab_subtitles[n].size > 0))
+                    if (Object.keys(o).length > 0 && o[n]) {
+                        e.log(`[PV-intercept] Netflix çift altyazı aktif: ${n} için track çekiliyor...`);
+                        for (const e of o[n]) L(e.url, n)
+                    } else m(n)
+            }
+        }
+    }), window.addEventListener("yt-navigate-start", e => {
+        s = !0, a = null, window.__primevocab_yt_subtitle_is_native = !0, t("__primevocab_yt_native_status", {
+            isNative: !0
+        });
+        t("__primevocab_yt_navigate", {
+            url: e.detail?.url || window.location.href
+        })
+    });
+    const V = new Set;
+
+    function A(i, n, r) {
+        if (!i) return void e.log(`[PV-intercept] ${n}: Boş body!`);
+        e.log(`[PV-intercept] ${n}: ${i.length} karakter alındı. İlk 200: ${i.slice(0,200)}`);
+        let a = T(i);
+        if (a && 0 !== a.size || (i.includes("WEBVTT") || i.includes("--\x3e")) && (a = C(i)), a && a.size > 0) {
+            window.__primevocab_subtitles[n] || (window.__primevocab_subtitles[n] = new Map), a.forEach((e, t) => window.__primevocab_subtitles[n].set(t, e));
+            const i = window.__primevocab_subtitles[n].size;
+            t("__primevocab_track_ready", {
+                lang: n,
+                count: i,
+                cues: Array.from(window.__primevocab_subtitles[n].entries())
+            }), e.log(`[PV-intercept] ✓ ${n} segment eklendi: +${a.size} cue (toplam: ${i})`)
+        } else e.log(`[PV-intercept] ✗ ${n}: Geçerli cue bulunamadı!`)
+    }
+
+    function L(n, r, a) {
+        if (!n) return;
+        if (!a && V.has(n)) return void e.log(`[PV-intercept] ${r} zaten çekilmiş, atlanıyor: ${n.slice(0,80)}`);
+        V.add(n), e.log(`[PV-intercept] Çekiliyor (${r}): ${n.slice(0,100)}...`);
+        if (navigator.userAgent.toLowerCase().includes("firefox")) return e.log(`[PV-intercept] Firefox detected. Delegating fetch for ${r} to isolated world: ${n.slice(0,80)}`), void t("__primevocab_request_fetch", {
+            url: n,
+            lang: r
+        });
+        i(n, {
+            credentials: "omit"
+        }).then(t => (e.log(`[PV-intercept] Yanıt (${r}): HTTP ${t.status}`), t.ok ? t.text() : Promise.reject(`HTTP ${t.status}`))).then(e => {
+            A(e, r)
+        }).catch(() => {})
+    }
+
+    function $(e) {
+        if (!e) return null;
+        const t = e.toLowerCase().trim(),
+            i = {
+                eng: "en",
+                tur: "tr",
+                deu: "de",
+                ger: "de",
+                fra: "fr",
+                fre: "fr",
+                spa: "es",
+                esp: "es",
+                ita: "it",
+                rus: "ru",
+                por: "pt",
+                ara: "ar",
+                zho: "zh",
+                chi: "zh",
+                jpn: "ja",
+                ko: "ko",
+                nld: "nl",
+                dut: "nl",
+                pol: "pl",
+                swe: "sv",
+                ukr: "ua",
+                ell: "el",
+                gre: "el",
+                ron: "ro",
+                rum: "ro",
+                hun: "hu",
+                ung: "hu",
+                ces: "cs",
+                cze: "cs",
+                slk: "sk",
+                slo: "sk",
+                bul: "bg",
+                hrv: "hr",
+                scr: "hr",
+                dan: "da",
+                fin: "fi",
+                ind: "id",
+                isl: "is",
+                ice: "is",
+                nor: "no",
+                nob: "nb",
+                nno: "nn",
+                heb: "he",
+                tha: "th",
+                vie: "vi"
+            } [t];
+        if (i) return i;
+        const n = ["en", "tr", "de", "fr", "es", "it", "ru", "pt", "ar", "zh", "ja", "ko", "nl", "pl", "sv", "uk", "he", "hi", "id", "ms", "no", "da", "fi", "th", "vi", "el", "ro", "hu", "cs", "sk", "bg", "hr", "nb", "nn", "is"];
+        return 2 === t.length && n.includes(t) ? t : 3 === t.length && n.includes(t.slice(0, 2)) ? t.slice(0, 2) : null
+    }
+
+    function C(e) {
+        try {
+            const t = new Map,
+                i = e.split(/\r?\n/);
+            let n = 0;
+            for (; n < i.length;) {
+                const e = i[n].trim();
+                if (e.includes("--\x3e")) {
+                    const r = e.split("--\x3e"),
+                        a = N(r[0].trim()),
+                        s = N(r[1].trim());
+                    let o = "";
+                    for (n++; n < i.length && "" !== i[n].trim();) o += (o ? "\n" : "") + i[n].trim(), n++;
+                    o = o.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(), o = k(o), isNaN(a) || isNaN(s) || !o || t.set(a, {
+                        text: o,
+                        end: s
+                    })
+                } else n++
+            }
+            return t.size ? t : null
+        } catch (e) {
+            return null
+        }
+    }
+
+    function z(e) {
+        for (const [t, i] of Object.entries(o))
+            for (const n of i)
+                if (e === n.url || e.startsWith(n.url.split("?")[0])) return t;
+        let t = e.match(/\/([a-z]{2,3})(?:[-_][a-z]{2,4})?\/[^/]*(\.ttml|\.xml|\.vtt|range)/i);
+        if (t) return $(t[1]);
+        if (t = e.match(/[?&]lang=([a-z]{2,3})/i), t) return $(t[1]);
+        if (t = e.match(/\/([a-z]{2,3})[-_]([A-Z]{2})\//), t) return $(t[1]);
+        if (t = e.match(/[-_]([a-z]{2})[-_][a-z0-9]/i), t) {
+            const e = t[1].toLowerCase();
+            if (["en", "tr", "de", "fr", "es", "it", "ru", "pt", "ar", "zh", "ja", "ko", "nl", "pl", "sv", "uk"].includes(e)) return e
+        }
+        return t = e.match(/[_/T/]([a-z]{2,3})[_/]/i), t ? $(t[1]) : (t = e.match(/\/([a-z]{3})\//i), t ? $(t[1]) : null)
+    }
+
+    function I(t) {
+        try {
+            e.log("[PV-intercept] handleNetflixMetadata çağrıldı, top-keys:", Object.keys(t || {}).slice(0, 10));
+            const i = t?.jsonGraph || t,
+                n = i?.videos;
+            if (n && "object" == typeof n) {
+                const l = [];
+                for (const c of Object.keys(n)) {
+                    const u = n[c],
+                        d = u?.timedtexttracks;
+                    if (d && "object" == typeof d)
+                        for (const f of Object.keys(d)) {
+                            const p = d[f],
+                                g = p?.value || p;
+                            g && "object" == typeof g && !g.$type && l.push(g)
+                        }
+                }
+                if (l.length > 0) return e.log(`[PV-intercept] Falcor format: ${l.length} track bulundu`), void S(l)
+            }
+            const r = t?.video?.timedtexttracks || t?.timedtexttracks;
+            if (Array.isArray(r) && r.length > 0) return e.log(`[PV-intercept] Düz format: ${r.length} track bulundu`), void S(r);
+            const a = t?.result?.videos || t?.videos || [];
+            if (Array.isArray(a))
+                for (const m of a)
+                    if (Array.isArray(m?.timedtexttracks) && m.timedtexttracks.length > 0) return void S(m.timedtexttracks);
+
+            function s(e, t = 0) {
+                if (!e || "object" != typeof e || t > 6) return null;
+                if (Array.isArray(e)) {
+                    if (e.length > 0 && (e[0]?.language || e[0]?.ttDownloadables)) return e;
+                    for (const i of e) {
+                        const e = s(i, t + 1);
+                        if (e) return e
+                    }
+                } else
+                    for (const [i, n] of Object.entries(e)) {
+                        if ("timedtexttracks" === i) {
+                            if (Array.isArray(n) && n.length > 0) return n;
+                            if ("object" == typeof n && !Array.isArray(n)) {
+                                const e = Object.values(n).map(e => e?.value || e).filter(e => e?.language);
+                                if (e.length > 0) return e
+                            }
+                        }
+                        const e = s(n, t + 1);
+                        if (e) return e
+                    }
+                return null
+            }
+            const o = s(t);
+            o ? (e.log(`[PV-intercept] Brute-force: ${o.length} track bulundu`), S(o)) : e.log("[PV-intercept] timedtexttracks bulunamadı! JSON yapısı:", JSON.stringify(t).slice(0, 300))
+        } catch (_) {
+            e.log("[PV-intercept] Netflix metadata parse hatası:", _.message)
+        }
+    }
+
+    function S(t) {
+        if (Array.isArray(t)) {
+            o = {};
+            for (const i of t) {
+                if (!i || i.isNoneTrack) continue;
+                const t = p(i).langCode;
+                if (!t) continue;
+                const n = $(t.split("-")[0]);
+                if (!n) continue;
+                const r = u(i);
+                r && r.url && (o[n] || (o[n] = []), o[n].push({
+                    url: r.url,
+                    format: r.format
+                }), e.log(`[PV-intercept] Netflix track kaydı: ${n} → ${r.format} → ${r.url.slice(0,80)}...`))
+            }
+            if (e.log("[PV-intercept] Netflix track map:", Object.keys(o)), r && n && o[n]) {
+                const e = o[n];
+                for (const t of e) L(t.url, n)
+            }
+        }
+    }
+
+    function O(i) {
+        ! function(i) {
+            try {
+                const n = JSON.stringify(i);
+                e.log("[PV-intercept] API top-level keys:", Object.keys(i || {}));
+                const r = n.match(/"episodeNumber"\s*:\s*(\d+)/),
+                    a = n.match(/"seasonNumber"\s*:\s*(\d+)/),
+                    s = n.match(/"episode"\s*:\s*(\d+)/),
+                    o = n.match(/"season"\s*:\s*(\d+)/),
+                    l = n.match(/"ordinalInSeason"\s*:\s*(\d+)/),
+                    c = n.match(/"episodeIndex"\s*:\s*(\d+)/);
+                e.log("[PV-intercept] Regex arama sonuçları:", {
+                    episodeNumber: r?.[1],
+                    seasonNumber: a?.[1],
+                    episode: s?.[1],
+                    season: o?.[1],
+                    ordinalInSeason: l?.[1],
+                    episodeIndex: c?.[1]
+                });
+                const u = i?.catalogMetadata?.catalog || i?.catalog || i?.catalogMetadata || null;
+                u && e.log("[PV-intercept] Catalog keys:", Object.keys(u));
+                const d = i?.catalogMetadata?.catalog?.episodeNumber ?? i?.catalogMetadata?.catalog?.episode ?? i?.catalogMetadata?.catalog?.ordinalInSeason ?? i?.catalog?.episodeNumber ?? i?.catalog?.episode ?? (r ? parseInt(r[1], 10) : null) ?? (l ? parseInt(l[1], 10) : null) ?? (c ? parseInt(c[1], 10) : null) ?? null,
+                    f = i?.catalogMetadata?.catalog?.seasonNumber ?? i?.catalogMetadata?.catalog?.season ?? i?.catalog?.seasonNumber ?? i?.catalog?.season ?? (a ? parseInt(a[1], 10) : null) ?? (o ? parseInt(o[1], 10) : null) ?? null,
+                    p = i?.catalogMetadata?.catalog?.title || i?.catalog?.title || null;
+                e.log(`[PV-intercept] Sonuç → season:${f} episode:${d} title:${p}`), null != d || null != f ? (window.__primevocab_episode_info = {
+                    episode: d,
+                    season: f,
+                    title: p
+                }, t("__primevocab_episode_ready", {
+                    episode: d,
+                    season: f,
+                    title: p
+                }), e.log(`[PV-intercept] ✓ Bölüm bilgisi kaydedildi: S${f}E${d}`)) : e.log("[PV-intercept] ✗ Episode/season bulunamadı. İlk 800 karakter:", n.slice(0, 800))
+            } catch (t) {
+                e.log("[PV-intercept] episode parse hatası:", t.message)
+            }
+        }(i);
+        try {
+            const e = i?.timedTextUrls?.timedTextUrls || i?.timedTextUrls?.tracks || i?.timedTextTracks?.tracks || i?.timedTextTracks || [];
+            if (!Array.isArray(e) || 0 === e.length) {
+                const e = JSON.stringify(i);
+                return void[...e.matchAll(/"languageCode"\s*:\s*"([^"]+)"[^}]*?"url"\s*:\s*"([^"]+\.ttml2[^"]*)"/g)].forEach(([, e, t]) => {
+                    const i = e.slice(0, 2).toLowerCase();
+                    L(t.replace(/\\\//g, "/"), i)
+                })
+            }
+            e.forEach(e => {
+                if (!e || e.isNoneTrack) return;
+                const t = p(e).langCode;
+                if (!t) return;
+                const i = $(t.split("-")[0]) || t.slice(0, 2).toLowerCase(),
+                    n = u(e),
+                    r = n?.url || e.url;
+                i && r && L(r, i)
+            })
+        } catch (t) {
+            e.log("[PV-intercept] parse hatası:", t.message)
+        }
+    }
+
+    function E() {
+        setTimeout(() => {
+            const t = performance.getEntriesByType("resource").find(e => e.name.includes("GetVodPlaybackResources") || e.name.includes("GetPlaybackResources"));
+            if (!t) return;
+            Object.keys(window.__primevocab_subtitles).length > 0 || (e.log("[PV-intercept] Kaçırılan istek tekrar deneniyor..."), i(t.name, {
+                credentials: "include",
+                method: "GET"
+            }).then(e => e.ok ? e.json() : null).then(e => {
+                e && O(e)
+            }).catch(() => {}))
+        }, 2e3)
+    }
+
+    function M(e) {
+        const t = e.split("?")[0];
+        for (const [i, n] of Object.entries(o))
+            for (const r of n)
+                if (r.url === e || r.url.split("?")[0] === t) return i;
+        return null
+    }
+    window.addEventListener("__primevocab_receive_fetch_response", e => {
+        const {
+            url: t,
+            lang: i,
+            body: n
+        } = e.detail || {};
+        t && i && A(n, i)
+    }), window.addEventListener("__primevocab_request_subtitles", () => {
+        if (window.__primevocab_subtitles) {
+            if (r && n) {
+                if (a) {
+                    window.__primevocab_subtitles[n] && window.__primevocab_subtitles[n].size > 0 || h(a, n)
+                }
+                if (window.location.hostname.includes("netflix.com")) {
+                    if (!(window.__primevocab_subtitles[n] && window.__primevocab_subtitles[n].size > 0))
+                        if (o[n] && o[n].length > 0) {
+                            e.log(`[PV-intercept] Netflix request_subtitles: ${n} için track çekiliyor...`);
+                            for (const e of o[n]) L(e.url, n)
+                        } else e.log(`[PV-intercept] Netflix request_subtitles: ${n} trackMap'te yok. Hafızadan veya geçici track değişimi ile çekim tetikleniyor...`), m(n)
+                }
+            }
+            Object.keys(window.__primevocab_subtitles).forEach(e => {
+                const i = window.__primevocab_subtitles[e];
+                i && i.size > 0 && t("__primevocab_track_ready", {
+                    lang: e,
+                    count: i.size,
+                    cues: Array.from(i.entries())
+                })
+            })
+        }
+    }), "loading" === document.readyState ? document.addEventListener("DOMContentLoaded", E) : E(), window.fetch = function(o, u) {
+        const d = "string" == typeof o ? o : o?.url || "";
+        if (d.includes("GetVodPlaybackResources") || d.includes("GetPlaybackResources")) return i(o, u).then(e => (e.clone().json().then(e => O(e)).catch(() => {}), e));
+        if (window.location.hostname.includes("netflix.com") && (d.includes("pathEvaluator") || d.includes("/metadata?") || d.includes("metadata?movieid") || d.includes("/api/shakti") || d.includes("ichnaea") || d.includes("/manifest?") || d.includes("playapi"))) return i(o, u).then(t => (t.clone().text().then(t => {
+            if (t && t.includes("timedtexttracks")) {
+                e.log(`[PV-intercept] Netflix metadata yakalandı: ${d.slice(0,100)}`);
+                try {
+                    I(JSON.parse(t))
+                } catch (t) {
+                    e.log("[PV-intercept] Netflix metadata JSON parse hatası:", t.message)
+                }
+            }
+        }).catch(() => {}), t));
+        if ((d.includes("youtube.com/api/timedtext") || d.includes("/api/timedtext")) && !V.has(d)) {
+            const l = (v(d, "tlang") || v(d, "lang") || "en").toLowerCase().slice(0, 2);
+            V.add(d);
+            const c = v(d, "kind");
+            if (s = "asr" !== c, window.__primevocab_yt_subtitle_is_native = s, t("__primevocab_yt_native_status", {
+                    isNative: s
+                }), e.log(`[PV-intercept] YouTube altyazı türü: ${s?"✅ Orijinal (native)":"⚠️ Otomatik (ASR)"} (${l})`), v(d, "tlang")) {
+                if (!a) try {
+                    const e = new URL(d.startsWith("http") ? d : window.location.origin + d);
+                    e.searchParams.delete("tlang"), a = e.toString()
+                } catch (e) {
+                    a = d
+                }
+            } else a = d;
+            const f = (n || "").toLowerCase().trim().slice(0, 2);
+            if (r && f && l !== f) {
+                window.__primevocab_subtitles[f] && window.__primevocab_subtitles[f].size > 0 || h(a || d, f, u)
+            }
+            return i(o, u).then(i => (i.clone().text().then(i => {
+                if (!i) return;
+                let n = null;
+                if (i.trim().startsWith("{")) try {
+                    n = x(JSON.parse(i))
+                } catch (e) {} else n = P(i);
+                if (n && n.size > 0) {
+                    window.__primevocab_subtitles[l] || (window.__primevocab_subtitles[l] = new Map), n.forEach((e, t) => window.__primevocab_subtitles[l].set(t, e));
+                    const i = window.__primevocab_subtitles[l].size;
+                    t("__primevocab_track_ready", {
+                        lang: l,
+                        count: i,
+                        cues: Array.from(window.__primevocab_subtitles[l].entries())
+                    }), e.log(`[PV-intercept] ✓ YouTube timedtext segment (${l}): +${n.size} cue (toplam: ${i})`)
+                }
+            }).catch(() => {}), i))
+        }
+        return (d.includes(".ttml") || d.includes(".ttml2") || d.includes("timedtext") || d.includes("subtitle") || d.includes("?o=") || d.includes("&o=") || d.includes(".nflxso.net") || d.includes("nflxext.com") || d.includes("/range/") || d.includes(".vtt") || d.includes("nflxvideo.net") || d.includes("nflximg.net")) && !V.has(d) ? i(o, u).then(i => (i.clone().text().then(i => {
+            if (!i) return;
+            let n = T(i);
+            if (n || !i.includes("WEBVTT") && !i.includes("--\x3e") || (n = C(i)), n && n.size > 0) {
+                const r = c(i) || z(d) || M(d) || l;
+                if (r) {
+                    V.add(d), window.__primevocab_subtitles[r] || (window.__primevocab_subtitles[r] = new Map), n.forEach((e, t) => window.__primevocab_subtitles[r].set(t, e));
+                    const i = window.__primevocab_subtitles[r].size;
+                    t("__primevocab_track_ready", {
+                        lang: r,
+                        count: i,
+                        cues: Array.from(window.__primevocab_subtitles[r].entries())
+                    }), e.log(`[PV-intercept] ✓ Subtitle segment (${r}): +${n.size} cue (toplam: ${i})`)
+                }
+            }
+        }).catch(() => {}), i)) : i(o, u)
+    };
+    const j = XMLHttpRequest.prototype.open,
+        R = XMLHttpRequest.prototype.send;
+
+    function D(e, t) {
+        if (!e || !t) return null;
+        const i = t.toLowerCase().trim().slice(0, 2),
+            n = {
+                en: "english",
+                tr: "turkish",
+                de: "german",
+                fr: "french",
+                es: "spanish",
+                it: "italian",
+                ru: "russian",
+                pt: "portuguese",
+                ar: "arabic",
+                zh: "chinese",
+                ja: "japanese",
+                ko: "korean",
+                nl: "dutch",
+                pl: "polish",
+                sv: "swedish",
+                uk: "ukrainian",
+                hi: "hindi"
+            } [i] || i,
+            r = "function" == typeof e.getTimedTextTrackList ? e.getTimedTextTrackList() : [];
+        return r && r.length && i ? r.find(e => {
+            const t = (e.bcp47 || "").toLowerCase(),
+                r = (e.language || "").toLowerCase(),
+                a = (e.displayName || "").toLowerCase();
+            return t.startsWith(i) || r.startsWith(i) || r.includes(n) || a.includes(n)
+        }) : null
+    }
+    XMLHttpRequest.prototype.open = function(e, t, ...i) {
+        return this.__pv_url = t || "", j.call(this, e, t, ...i)
+    }, XMLHttpRequest.prototype.send = function(...i) {
+        const o = this.__pv_url || "",
+            u = e => {
+                if (e.responseType && "" !== e.responseType && "text" !== e.responseType) return null;
+                try {
+                    return e.responseText
+                } catch (e) {
+                    return null
+                }
+            };
+        if ((o.includes("GetVodPlaybackResources") || o.includes("GetPlaybackResources")) && this.addEventListener("load", function() {
+                const e = u(this);
+                if (e) try {
+                    O(JSON.parse(e))
+                } catch (e) {}
+            }), window.location.hostname.includes("netflix.com") && (o.includes("pathEvaluator") || o.includes("/metadata?") || o.includes("metadata?movieid") || o.includes("/api/shakti") || o.includes("ichnaea") || o.includes("/manifest?") || o.includes("playapi")) && this.addEventListener("load", function() {
+                const e = u(this);
+                if (e && e.includes("timedtexttracks")) try {
+                    I(JSON.parse(e))
+                } catch (e) {}
+            }), o.includes("youtube.com/api/timedtext") || o.includes("/api/timedtext")) {
+            const i = v(o, "kind");
+            if (s = "asr" !== i, window.__primevocab_yt_subtitle_is_native = s, t("__primevocab_yt_native_status", {
+                    isNative: s
+                }), e.log("[PV-intercept] YouTube altyazı türü (XHR): " + (s ? "✅ Orijinal (native)" : "⚠️ Otomatik (ASR)")), v(o, "tlang")) {
+                if (!a) try {
+                    const e = new URL(o.startsWith("http") ? o : window.location.origin + o);
+                    e.searchParams.delete("tlang"), a = e.toString()
+                } catch (e) {
+                    a = o
+                }
+            } else a = o;
+            this.addEventListener("load", function() {
+                const e = u(this);
+                if (!e) return;
+                const i = (v(o, "tlang") || v(o, "lang") || "en").toLowerCase().slice(0, 2);
+                let n = null;
+                if (e.trim().startsWith("{")) try {
+                    n = x(JSON.parse(e))
+                } catch (e) {} else n = P(e);
+                n && n.size > 0 && (window.__primevocab_subtitles[i] || (window.__primevocab_subtitles[i] = new Map), n.forEach((e, t) => window.__primevocab_subtitles[i].set(t, e)), t("__primevocab_track_ready", {
+                    lang: i,
+                    count: window.__primevocab_subtitles[i].size,
+                    cues: Array.from(window.__primevocab_subtitles[i].entries())
+                }))
+            });
+            const l = (n || "").toLowerCase().trim().slice(0, 2),
+                c = (v(o, "tlang") || v(o, "lang") || "en").toLowerCase().slice(0, 2);
+            if (r && l && c !== l) {
+                window.__primevocab_subtitles[l] && window.__primevocab_subtitles[l].size > 0 || h(a || o, l)
+            }
+        }
+        if ((o.includes(".ttml") || o.includes(".ttml2") || o.includes("timedtext") || o.includes("subtitle") || o.includes("?o=") || o.includes("&o=") || o.includes(".nflxso.net") || o.includes("nflxext.com") || o.includes("/range/") || o.includes(".vtt") || o.includes("nflxvideo.net") || o.includes("nflximg.net")) && !V.has(o)) {
+            this.addEventListener("load", function() {
+                const i = u(this);
+                if (!i) return;
+                let n = T(i);
+                if (n || !i.includes("WEBVTT") && !i.includes("--\x3e") || (n = C(i)), n && n.size > 0) {
+                    const r = c(i) || z(o) || M(o) || l;
+                    r && (V.add(o), window.__primevocab_subtitles[r] || (window.__primevocab_subtitles[r] = new Map), n.forEach((e, t) => window.__primevocab_subtitles[r].set(t, e)), t("__primevocab_track_ready", {
+                        lang: r,
+                        count: window.__primevocab_subtitles[r].size,
+                        cues: Array.from(window.__primevocab_subtitles[r].entries())
+                    }), e.log(`[PV-intercept] ✓ Subtitle segment (XHR) (${r}): +${n.size} cue`))
+                }
+            })
+        }
+        return R.apply(this, i)
+    }, window.addEventListener("__primevocab_set_preferred_source_lang", e => {
+        window.__primevocab_preferred_source_lang = e.detail?.lang || null
+    });
+    let W = null;
+    setInterval(() => {
+        try {
+            const t = window.netflix?.appContext?.state?.playerApp?.getAPI(),
+                i = t?.videoPlayer;
+            if (!i) return;
+            const n = i.getAllPlayerSessionIds() || [];
+            if (!n.length) return;
+            const r = i.getVideoPlayerBySessionId(n[0]);
+            if (!r) return;
+            const a = "function" == typeof r.getMovieId ? String(r.getMovieId()) : n[0];
+            if (a && a !== W) {
+                W = a;
+                const t = window.__primevocab_preferred_source_lang;
+                if (t) {
+                    const i = D(r, t);
+                    i && "function" == typeof r.setTimedTextTrack && (r.setTimedTextTrack(i), e.log(`[PV-intercept] Netflix initial track auto-switched to '${t}':`, i))
+                }
+            }
+        } catch (e) {}
+    }, 1e3), window.addEventListener("__primevocab_netflix_control", i => {
+        try {
+            const n = i.detail?.command,
+                r = i.detail?.time,
+                a = i.detail?.delta,
+                s = window.netflix?.appContext?.state?.playerApp?.getAPI(),
+                o = s?.videoPlayer;
+            if (!o) return void e.warn("[PV-intercept] Netflix videoPlayer API not found.");
+            const l = o.getAllPlayerSessionIds() || [];
+            if (!l.length) return void e.warn("[PV-intercept] Netflix active player session ID not found.");
+            let c = null;
+            const u = window.location.href.match(/\/watch\/(\d+)/),
+                d = u ? u[1] : null;
+            if (d && "function" == typeof o.getVideoPlayerBySessionId)
+                for (const e of l) try {
+                    const t = o.getVideoPlayerBySessionId(e);
+                    if ((t && "function" == typeof t.getMovieId ? String(t.getMovieId()) : null) === d || e.includes(d)) {
+                        c = t;
+                        break
+                    }
+                } catch (i) {}
+            if (c || "function" != typeof o.getVideoPlayerBySessionId || (c = o.getVideoPlayerBySessionId(l[0])), !c) return void e.warn("[PV-intercept] Netflix player instance not found.");
+            if (!c._pvTrackMonitorActive) {
+                c._pvTrackMonitorActive = !0;
+                let e = null;
+                setInterval(() => {
+                    try {
+                        const i = "function" == typeof c.getTimedTextTrack ? c.getTimedTextTrack() : null,
+                            n = (i?.bcp47 || i?.language || "").toLowerCase().slice(0, 2);
+                        n && n !== e && (e = n, t("__primevocab_active_track_changed", {
+                            lang: n
+                        }))
+                    } catch (e) {}
+                }, 1200)
+            }
+            if ("play" === n) c.play();
+            else if ("pause" === n) c.pause();
+            else if ("seek" === n && void 0 !== r) c.seek(1e3 * r);
+            else if ("seek_relative" === n && void 0 !== a) {
+                const e = c.getCurrentTime();
+                c.seek(Math.max(0, e + 1e3 * a))
+            } else if ("set_subtitle_track" === n) {
+                const t = (i.detail?.lang || "").toLowerCase().trim();
+                window.__primevocab_preferred_source_lang = t;
+                const n = D(c, t);
+                n && "function" == typeof c.setTimedTextTrack ? (c.setTimedTextTrack(n), e.log("[PV-intercept] Netflix subtitle track switched to:", n)) : e.warn(`[PV-intercept] Subtitle track for '${t}' not available on this video.`)
+            }
+        } catch (t) {
+            e.error("[PV-intercept] Failed to control Netflix player via API:", t)
+        }
+    })
+}();
