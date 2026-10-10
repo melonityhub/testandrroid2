@@ -1,0 +1,138 @@
+name: Android APK (build + release)
+
+# Push a tag like  android-v1.0.0  ->  builds, signs and publishes a GitHub Release with the APK.
+# Every push / PR that touches the app only builds and uploads the APK as a workflow artifact.
+# Run it by hand from the Actions tab (Run workflow) to get a test build any time.
+on:
+  push:
+    branches: [main, master]
+    tags: ['android-v*']
+    paths:
+      - 'proudvocab-android/**'
+      - 'proudvocab-desktop/src/renderer/**'
+      - '.github/workflows/android.yml'
+  pull_request:
+    paths:
+      - 'proudvocab-android/**'
+      - 'proudvocab-desktop/src/renderer/**'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Also publish a GitHub Release (tag android-v<version>)'
+        type: boolean
+        default: false
+      version:
+        description: 'Version for the release, e.g. 1.0.1 (only used when "release" is on)'
+        type: string
+        required: false
+
+permissions:
+  contents: write   # needed to create the Release
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: proudvocab-android
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Make sure the Android SDK pieces exist (no-op on GitHub runners)
+        run: |
+          set +e
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ -x "$SDKM" ]; then
+            yes | "$SDKM" --licenses > /dev/null 2>&1
+            "$SDKM" "platforms;android-34" "build-tools;34.0.0" > /dev/null 2>&1
+          fi
+          ls "$ANDROID_HOME/platforms" "$ANDROID_HOME/build-tools" 2>/dev/null
+          exit 0
+
+      - name: Pre-build checklist (web bundle, license removal, XML, Java compile, JVM tests)
+        run: bash scripts/verify.sh
+
+      - name: Work out the version
+        id: ver
+        run: |
+          REF="${GITHUB_REF}"
+          RELEASE=false
+          if [[ "$REF" == refs/tags/android-v* ]]; then
+            VERSION="${REF#refs/tags/android-v}"
+            RELEASE=true
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.release }}" == "true" ]]; then
+            VERSION="${{ inputs.version }}"
+            [ -z "$VERSION" ] && { echo "::error::Enter a version (e.g. 1.0.1) when 'release' is enabled"; exit 1; }
+            RELEASE=true
+          else
+            VERSION="1.0.0-ci.${GITHUB_RUN_NUMBER}"
+          fi
+          if [[ "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
+            CODE=$(( BASH_REMATCH[1] * 10000 + BASH_REMATCH[2] * 100 + BASH_REMATCH[3] ))
+          else
+            echo "::error::Version '$VERSION' must look like 1.2.3"; exit 1
+          fi
+          echo "version=$VERSION"   >> "$GITHUB_OUTPUT"
+          echo "code=$CODE"         >> "$GITHUB_OUTPUT"
+          echo "release=$RELEASE"   >> "$GITHUB_OUTPUT"
+          echo "Building $VERSION (versionCode $CODE, release=$RELEASE)"
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build the signed release APK
+        run: gradle --no-daemon --stacktrace assembleRelease -PpvVersionName="${{ steps.ver.outputs.version }}" -PpvVersionCode="${{ steps.ver.outputs.code }}"
+
+      - name: Check the APK (signature, package, minSdk)
+        run: |
+          APK=app/build/outputs/apk/release/app-release.apk
+          test -f "$APK" || { echo "::error::APK not found"; ls -R app/build/outputs || true; exit 1; }
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BT/apksigner" verify --verbose --print-certs "$APK"
+          "$BT/aapt2" dump badging "$APK" > badging.txt
+          grep -E "^(package|sdkVersion|targetSdkVersion|uses-permission|application-label:)" badging.txt
+          grep -q "name='app.proudvocab.android'" badging.txt
+          grep -q "sdkVersion:'28'" badging.txt
+          cp "$APK" "ProudVocab-${{ steps.ver.outputs.version }}.apk"
+          ls -l "ProudVocab-${{ steps.ver.outputs.version }}.apk"
+
+      - name: Upload the APK as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProudVocab-${{ steps.ver.outputs.version }}-apk
+          path: proudvocab-android/ProudVocab-${{ steps.ver.outputs.version }}.apk
+          if-no-files-found: error
+
+      - name: Publish the GitHub Release
+        if: steps.ver.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="android-v${{ steps.ver.outputs.version }}"
+          APK="ProudVocab-${{ steps.ver.outputs.version }}.apk"
+          NOTES="ProudVocab for Android ${{ steps.ver.outputs.version }}  (Android 9+, tested target: POCO X3 Pro). Download the APK, open it and allow installs from your browser/file manager when Android asks."
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --clobber
+          else
+            gh release create "$TAG" "$APK" --target "$GITHUB_SHA" --title "ProudVocab ${{ steps.ver.outputs.version }}" --notes "$NOTES"
+          fi

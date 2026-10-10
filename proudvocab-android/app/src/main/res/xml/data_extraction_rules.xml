@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="file" path="proudvocab-data" />
+        <exclude domain="file" path="dictionary" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="file" path="proudvocab-data" />
+        <exclude domain="file" path="dictionary" />
+    </device-transfer>
+</data-extraction-rules>

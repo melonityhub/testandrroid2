@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>ProudVocab</title>
+<link rel="stylesheet" href="shell.css">
+<script src="/android-bridge.js"></script>
+</head>
+<body class="booting">
+
+  <header id="topbar">
+    <div class="brand">
+      <img src="ext/icons/icon48.png" alt="" class="brand-icon" onerror="this.style.display='none'">
+      <span class="brand-name">ProudVocab</span>
+    </div>
+
+    <div class="now-playing" id="now-playing" title="">
+      <span id="now-playing-text">No video loaded</span>
+    </div>
+
+    <span id="panel-status" class="panel-status" title="Vocabulary panel connection"></span>
+
+    <button id="btn-dict" class="tb-btn" aria-label="Offline dictionary">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M4 5.5V21.5"/><path d="M9 8h7M9 12h5"/></svg>
+      <i class="dict-dot"></i>
+    </button>
+    <button id="btn-panel" class="tb-btn active" aria-label="Show / hide the vocabulary panel">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 14h18"/></svg>
+    </button>
+    <button id="btn-fullscreen" class="tb-btn" aria-label="Full screen">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+    </button>
+  </header>
+
+  <main id="app">
+    <section id="stage"></section>
+    <aside id="panel-wrap"></aside>
+  </main>
+
+  <div id="dict-overlay" hidden>
+    <iframe id="dict-frame" title="Offline dictionary"></iframe>
+  </div>
+
+  <div id="boot"><div class="spin"></div><div>Starting ProudVocab…</div></div>
+  <script src="shell.js"></script>
+</body>
+</html>
