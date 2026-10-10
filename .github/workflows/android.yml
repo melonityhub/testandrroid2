@@ -1,8 +1,9 @@
 name: Android APK (build + release)
 
-# Push a tag like  android-v1.0.0  ->  builds, signs and publishes a GitHub Release with the APK.
-# Every push / PR that touches the app only builds and uploads the APK as a workflow artifact.
-# Run it by hand from the Actions tab (Run workflow) to get a test build any time.
+# Every push to the main branch that touches the app builds + signs the APK and publishes a GitHub
+# Release automatically. The tag is created for you:  android-v<VERSION>.<run number>  (VERSION = proudvocab-android/VERSION,
+# e.g. android-v1.0.7). Put  [skip release]  in the commit message to only build without publishing.
+# Pull requests only build. You can also push your own tag (android-v2.0.0) or use "Run workflow".
 on:
   push:
     branches: [main, master]
@@ -19,11 +20,11 @@ on:
   workflow_dispatch:
     inputs:
       release:
-        description: 'Also publish a GitHub Release (tag android-v<version>)'
+        description: 'Publish a GitHub Release (the tag android-v<version> is created automatically)'
         type: boolean
-        default: false
+        default: true
       version:
-        description: 'Version for the release, e.g. 1.0.1 (only used when "release" is on)'
+        description: 'Version, e.g. 2.0.0 (empty = VERSION file + run number)'
         type: string
         required: false
 
@@ -70,30 +71,39 @@ jobs:
       - name: Pre-build checklist (web bundle, license removal, XML, Java compile, JVM tests)
         run: bash scripts/verify.sh
 
-      - name: Work out the version
+      - name: Work out the version (and whether to publish)
         id: ver
+        env:
+          EVENT: ${{ github.event_name }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          IN_RELEASE: ${{ inputs.release }}
+          IN_VERSION: ${{ inputs.version }}
         run: |
-          REF="${GITHUB_REF}"
+          BASE="$(tr -d ' \r\n' < VERSION)"
           RELEASE=false
-          if [[ "$REF" == refs/tags/android-v* ]]; then
-            VERSION="${REF#refs/tags/android-v}"
+          if [[ "$GITHUB_REF" == refs/tags/android-v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/android-v}"
             RELEASE=true
-          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.release }}" == "true" ]]; then
-            VERSION="${{ inputs.version }}"
-            [ -z "$VERSION" ] && { echo "::error::Enter a version (e.g. 1.0.1) when 'release' is enabled"; exit 1; }
+          elif [ "$EVENT" = "push" ]; then
+            VERSION="${BASE}.${GITHUB_RUN_NUMBER}"
             RELEASE=true
+            case "$COMMIT_MSG" in *"[skip release]"*) RELEASE=false ;; esac
+          elif [ "$EVENT" = "workflow_dispatch" ]; then
+            VERSION="${IN_VERSION:-${BASE}.${GITHUB_RUN_NUMBER}}"
+            RELEASE="${IN_RELEASE:-true}"
           else
-            VERSION="1.0.0-ci.${GITHUB_RUN_NUMBER}"
+            VERSION="${BASE}.0-pr.${GITHUB_RUN_NUMBER}"
           fi
           if [[ "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
-            CODE=$(( BASH_REMATCH[1] * 10000 + BASH_REMATCH[2] * 100 + BASH_REMATCH[3] ))
+            # 1.0.7 -> 1000007 : always grows with the version, so every release installs over the previous one
+            CODE=$(( BASH_REMATCH[1] * 1000000 + BASH_REMATCH[2] * 1000 + BASH_REMATCH[3] ))
           else
             echo "::error::Version '$VERSION' must look like 1.2.3"; exit 1
           fi
           echo "version=$VERSION"   >> "$GITHUB_OUTPUT"
           echo "code=$CODE"         >> "$GITHUB_OUTPUT"
           echo "release=$RELEASE"   >> "$GITHUB_OUTPUT"
-          echo "Building $VERSION (versionCode $CODE, release=$RELEASE)"
+          echo "Building $VERSION (versionCode $CODE, publish=$RELEASE)"
 
       - name: Set up Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
@@ -118,6 +128,7 @@ jobs:
           PERMS=$(grep -c "^uses-permission" badging.txt || true)
           [ "$PERMS" = "1" ] || { echo "::error::unexpected permissions in the APK"; grep "^uses-permission" badging.txt; exit 1; }
           cp "$APK" "ProudVocab-${{ steps.ver.outputs.version }}.apk"
+          sha256sum "ProudVocab-${{ steps.ver.outputs.version }}.apk" | tee "ProudVocab-${{ steps.ver.outputs.version }}.apk.sha256"
           ls -l "ProudVocab-${{ steps.ver.outputs.version }}.apk"
 
       - name: Upload the APK as a workflow artifact
@@ -127,16 +138,19 @@ jobs:
           path: proudvocab-android/ProudVocab-${{ steps.ver.outputs.version }}.apk
           if-no-files-found: error
 
-      - name: Publish the GitHub Release
+      - name: Publish the GitHub Release (tag is created automatically)
         if: steps.ver.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="android-v${{ steps.ver.outputs.version }}"
-          APK="ProudVocab-${{ steps.ver.outputs.version }}.apk"
-          NOTES="ProudVocab for Android ${{ steps.ver.outputs.version }}  (Android 9+, tested target: POCO X3 Pro). Download the APK, open it and allow installs from your browser/file manager when Android asks."
+          V="${{ steps.ver.outputs.version }}"
+          TAG="android-v$V"
+          APK="ProudVocab-$V.apk"
+          SUM="$APK.sha256"
+          NOTES="ProudVocab for Android $V - one universal APK for Android 9+ (arm64-v8a, armeabi-v7a, x86, x86_64: the app has no native code, so the same file runs everywhere; POCO X3 Pro = arm64). Download the APK, open it and allow installs from your browser / file manager when Android asks. Commit: $GITHUB_SHA"
           if gh release view "$TAG" > /dev/null 2>&1; then
-            gh release upload "$TAG" "$APK" --clobber
+            gh release upload "$TAG" "$APK" "$SUM" --clobber
           else
-            gh release create "$TAG" "$APK" --target "$GITHUB_SHA" --title "ProudVocab ${{ steps.ver.outputs.version }}" --notes "$NOTES"
+            gh release create "$TAG" "$APK" "$SUM" --target "$GITHUB_SHA" --title "ProudVocab $V" --notes "$NOTES"
           fi
+          echo "Released: https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"
