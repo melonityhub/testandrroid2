@@ -1,5 +1,0 @@
-// Top-level build file. The app has NO third-party dependencies (plain
-// android.* APIs + WebView), so the only plugin needed is AGP itself.
-plugins {
-    id 'com.android.application' version '8.5.2' apply false
-}

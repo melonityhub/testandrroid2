@@ -1,8 +1,0 @@
-<resources>
-    <string name="app_name">ProudVocab</string>
-    <string name="dlg_ok">OK</string>
-    <string name="dlg_cancel">Cancel</string>
-    <string name="err_webview">The system WebView could not start. Please update "Android System WebView" and "Google Chrome" from the Play Store.</string>
-    <string name="toast_saved">Saved</string>
-    <string name="toast_save_failed">Could not save the file</string>
-</resources>
