@@ -110,9 +110,13 @@ jobs:
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
           "$BT/apksigner" verify --verbose --print-certs "$APK"
           "$BT/aapt2" dump badging "$APK" > badging.txt
-          grep -E "^(package|sdkVersion|targetSdkVersion|uses-permission|application-label:)" badging.txt
+          grep -E "^(package|sdkVersion|minSdkVersion|targetSdkVersion|uses-permission|application-label:)" badging.txt
           grep -q "name='app.proudvocab.android'" badging.txt
-          grep -q "sdkVersion:'28'" badging.txt
+          # older aapt2 prints sdkVersion:'28', newer prints minSdkVersion:'28' - accept both
+          grep -Eq "^(min)?[sS]dkVersion:'28'" badging.txt || { echo "::error::minSdk is not 28"; exit 1; }
+          # only INTERNET may be requested
+          PERMS=$(grep -c "^uses-permission" badging.txt || true)
+          [ "$PERMS" = "1" ] || { echo "::error::unexpected permissions in the APK"; grep "^uses-permission" badging.txt; exit 1; }
           cp "$APK" "ProudVocab-${{ steps.ver.outputs.version }}.apk"
           ls -l "ProudVocab-${{ steps.ver.outputs.version }}.apk"
 
