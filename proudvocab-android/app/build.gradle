@@ -1,0 +1,63 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Version comes from CI (-PpvVersionName=1.2.3 -PpvVersionCode=10203);
+// the defaults are used for local builds.
+def pvVersionName = (project.findProperty('pvVersionName') ?: '1.0.0').toString()
+def pvVersionCode = Integer.parseInt((project.findProperty('pvVersionCode') ?: '1').toString())
+
+// Signing: CI may inject its own keystore through env vars; otherwise the
+// keystore committed in /keystore is used so every release has the SAME
+// signature and can be installed over the previous one.
+def ksFile = System.getenv('PV_KEYSTORE') ?: "${rootDir}/keystore/proudvocab-release.p12"
+def ksPass = System.getenv('PV_KEYSTORE_PASSWORD') ?: 'proudvocab'
+def ksAlias = System.getenv('PV_KEY_ALIAS') ?: 'proudvocab'
+def keyPass = System.getenv('PV_KEY_PASSWORD') ?: ksPass
+
+android {
+    namespace 'app.proudvocab.android'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'app.proudvocab.android'
+        minSdk 28            // Android 9+
+        targetSdk 34
+        versionCode pvVersionCode
+        versionName pvVersionName
+    }
+
+    signingConfigs {
+        release {
+            storeFile file(ksFile)
+            storeType 'pkcs12'
+            storePassword ksPass
+            keyAlias ksAlias
+            keyPassword keyPass
+            enableV1Signing true
+            enableV2Signing true
+            enableV3Signing true
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            shrinkResources false
+        }
+        debug {
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
