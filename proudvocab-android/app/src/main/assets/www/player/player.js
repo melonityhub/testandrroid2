@@ -135,9 +135,8 @@
     return s;
   }
   function applyI18n() {
-    const nav = String(navigator.language || '').toLowerCase();
     const ui = (BUS && BUS.i18n().uiLanguage) || 'en';
-    LANG = nav.startsWith('fa') ? 'fa' : ui === 'tr' ? 'tr' : 'en';
+    LANG = STRINGS[ui] ? ui : 'en';
     document.documentElement.lang = LANG;
     document.querySelectorAll('[data-t]').forEach((el) => {
       const val = t(el.getAttribute('data-t'));
@@ -1241,6 +1240,7 @@
   window.__pvDesktop = api;
 
   async function start() {
+    if (BUS) window.top.document.addEventListener('pv-language-changed', applyI18n);
     applyI18n();
     document.body.classList.add('pv-no-video');
     document.body.classList.toggle('pv-plain-captions', state.showPlain);

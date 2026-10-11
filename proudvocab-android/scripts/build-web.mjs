@@ -14,6 +14,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { renderEnglishPanel } from './english-ui.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
@@ -90,6 +91,58 @@ patch('player/player.html', '<script>window.__PV_ROLE__ = "player";</script>', B
 patch('player/player.html', '</head>', '<link rel="stylesheet" href="/mobile-player.css">\n</head>');
 patch('ext/sidepanel/panel.html', '<script>window.__PV_ROLE__ = "panel";</script>', BRIDGE_TAG + '  <script>window.__PV_ROLE__ = "panel";</script>');
 patch('ext/sidepanel/panel.html', '<meta name="viewport" content="width=device-width, initial-scale=1.0">', '<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">');
+
+/* ------------------------------------------- 3b. English menu defaults */
+console.log('setting English UI defaults (independent of the phone language)');
+// Fix upstream key mismatches instead of leaving their Turkish HTML fallbacks.
+const english = JSON.parse(read('ext/_locales/en/messages.json'));
+for (const [key, original] of Object.entries({
+  settings_prime_domain_title: 'settings_prime_domain',
+  settings_prime_domain_default: 'settings_prime_domain_option_default',
+  profile_sync_title: 'profile_sync_enable',
+  modal_btn_close: 'premium_modal_close_btn',
+})) {
+  if (!english[original]?.message) throw new Error(`Missing English alias source: ${original}`);
+  english[key] = { ...english[original] };
+}
+for (const [key, message] of Object.entries({
+  settings_app_lang: 'App language',
+  settings_lang_auto: 'English (default)',
+  profile_login_google: 'Sign in with Google',
+  sync_complete: 'Sync complete',
+  premium_modal_message: 'All features are available in the Android app.',
+  premium_smart_features_limit_desc: 'All smart features are available in the Android app.',
+})) english[key] = { message };
+write('ext/_locales/en/messages.json', JSON.stringify(english, null, 2));
+write('ext/sidepanel/panel.html', renderEnglishPanel(read('ext/sidepanel/panel.html'), english));
+
+// Every runtime default must agree with the shell, including after settings are
+// cleared/restored. Do not change targetLang or the vocabulary learning language.
+patch('ext/content/utils_common.js',
+  /if\(!e\|\|"auto"===e\)\{const t=[^;]+;e=\["en","tr","de","fr","es"\]\.includes\(t\)\?t:"en"\}/,
+  'if(!e||"auto"===e)e="en";');
+patch('ext/content/utils_common.js', 'appLanguage:"auto"', 'appLanguage:"en"');
+patch('ext/content/utils_common.js', 't?.appLanguage||"auto"', 't?.appLanguage||"en"');
+patch('ext/content/utils_common.js', 'o("auto")', 'o("en")');
+patch('ext/content/inject_common.js', 'e.appLanguage||"auto"', 'e.appLanguage||"en"');
+patch('ext/sidepanel/panel_settings.js', 'appLanguage:"auto"', 'appLanguage:"en"');
+patch('ext/sidepanel/panel_settings.js', 'const C=e.appLanguage||"tr"',
+  'const C=e.appLanguage&&"auto"!==e.appLanguage?e.appLanguage:"en"');
+patch('ext/sidepanel/panel_settings.js', 'e.settings.newValue?.appLanguage||"auto"',
+  'e.settings.newValue?.appLanguage||"en"');
+
+// The desktop player also sniffed navigator.language, ignoring the menu setting
+// on Persian phones. In the Android app all UI follows the chosen menu language.
+patch('player/player.js',
+  `    const nav = String(navigator.language || '').toLowerCase();
+    const ui = (BUS && BUS.i18n().uiLanguage) || 'en';
+    LANG = nav.startsWith('fa') ? 'fa' : ui === 'tr' ? 'tr' : 'en';`,
+  `    const ui = (BUS && BUS.i18n().uiLanguage) || 'en';
+    LANG = STRINGS[ui] ? ui : 'en';`);
+patch('player/player.js', '  async function start() {\n    applyI18n();',
+  `  async function start() {
+    if (BUS) window.top.document.addEventListener('pv-language-changed', applyI18n);
+    applyI18n();`);
 
 /* ------------------------------------------- 4. LICENSE / PREMIUM REMOVAL */
 console.log('removing license / premium logic');

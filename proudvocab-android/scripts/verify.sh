@@ -14,6 +14,11 @@ if node scripts/build-web.mjs > /tmp/pv-build-web.log 2>&1; then
 else
   cat /tmp/pv-build-web.log; bad "build-web.mjs failed (a desktop source changed under a patch?)"
 fi
+if node --test test/*.test.mjs > /tmp/pv-web-test.log 2>&1; then
+  ok "web regression tests: $(grep '^# pass ' /tmp/pv-web-test.log | tail -1)"
+else
+  cat /tmp/pv-web-test.log; bad "web regression tests failed"
+fi
 WWW=app/src/main/assets/www
 n=0; badjs=0
 while IFS= read -r f; do

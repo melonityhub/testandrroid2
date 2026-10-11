@@ -19,6 +19,7 @@
   const APP_ORIGIN = window.location.origin;
   const EXT_ROOT = APP_ORIGIN + '/ext/';
   const VIRTUAL_TAB_ID = 1;
+  const DEFAULT_UI_LANGUAGE = 'en';
   const SUPPORTED_UI_LANGS = ['en', 'tr', 'de', 'fr', 'es'];
 
   /* ------------------------------------------------------------------ state */
@@ -48,7 +49,8 @@
   const shellStorageListeners = [];
   let portSeq = 0;
   let persistTimer = null;
-  let i18nBundle = { uiLanguage: 'en', messages: {} };
+  let i18nBundle = { uiLanguage: DEFAULT_UI_LANGUAGE, messages: {} };
+  let englishMessages = null;
   let appInfo = { version: '1.0.0', platform: 'android', arch: 'arm64' };
   let virtualTab = {
     id: VIRTUAL_TAB_ID, index: 0, windowId: 1, active: true, highlighted: true,
@@ -364,13 +366,10 @@
   }
 
   function maybeReloadI18n(changes, area) {
-    const s = changes.settings;
-    if (!s || !s.newValue) return;
-    const want = s.newValue.appLanguage;
-    if (want && want !== desktopCfg.__lastAppLanguage) {
-      desktopCfg.__lastAppLanguage = want;
-      loadI18n(want).catch(() => {});
-    }
+    if (!changes.settings) return;
+    // Resetting/removing settings must restore English, not the phone's locale.
+    const want = resolveMenuLanguage();
+    if (want !== desktopCfg.__lastAppLanguage) loadI18n(want).catch(() => {});
     void area;
   }
 
@@ -418,27 +417,57 @@
   }
 
   /* ==================================================================== i18n */
-  async function loadI18n(explicit) {
-    let lang = explicit;
-    if (!lang || lang === 'auto') {
-      const stored = (store.sync.settings && store.sync.settings.appLanguage) || (store.local.settings && store.local.settings.appLanguage) || 'auto';
-      if (stored && stored !== 'auto') lang = stored;
-      else {
-        const nav = (bridge && appInfo.locale) || navigator.language || 'en';
-        const short = String(nav).split('-')[0].toLowerCase();
-        lang = SUPPORTED_UI_LANGS.indexOf(short) >= 0 ? short : 'en';
+  function resolveMenuLanguage(explicit) {
+    const stored = (store.sync.settings && store.sync.settings.appLanguage) ||
+      (store.local.settings && store.local.settings.appLanguage);
+    const lang = String(explicit || stored || DEFAULT_UI_LANGUAGE).toLowerCase().split(/[-_]/)[0];
+    // Legacy "auto", missing and unsupported preferences use English. The menu
+    // language is independent of both the phone locale and translation target.
+    return SUPPORTED_UI_LANGS.includes(lang) ? lang : DEFAULT_UI_LANGUAGE;
+  }
+
+  function initializeMenuLanguage() {
+    const migrate = !store.local.__pvEnglishMenuV2;
+    const localSettings = store.local.settings || {};
+    const syncSettings = store.sync.settings || {};
+    const settings = { ...localSettings, ...syncSettings };
+    for (const platform of ['local', 'youtube', 'prime', 'netflix']) {
+      if (localSettings[platform] && syncSettings[platform]) {
+        settings[platform] = { ...localSettings[platform], ...syncSettings[platform] };
       }
     }
-    if (SUPPORTED_UI_LANGS.indexOf(lang) < 0) lang = 'en';
+    settings.appLanguage = migrate ? DEFAULT_UI_LANGUAGE : resolveMenuLanguage(settings.appLanguage);
+    if (!migrate && sameValue(store.sync.settings, settings)) return;
+
+    store.sync.settings = settings;
+    if (migrate && store.local.settings) {
+      store.local.settings = { ...localSettings, appLanguage: DEFAULT_UI_LANGUAGE };
+    }
+    // V1 only changed the shell preference; its marker must not prevent this
+    // repair for installs that still have Turkish menus. Later manual choices
+    // are preserved, as are vocabulary, SRS and translation preferences.
+    store.local.__pvEnglishMenuV2 = true;
+    schedulePersist();
+  }
+
+  async function fetchMessages(lang) {
+    const res = await fetch(`${EXT_ROOT}_locales/${lang}/messages.json`);
+    if (!res.ok) throw new Error(`Could not load ${lang} messages: HTTP ${res.status}`);
+    return res.json();
+  }
+
+  async function loadI18n(explicit) {
+    const lang = resolveMenuLanguage(explicit);
     try {
-      const res = await fetch(`${EXT_ROOT}_locales/${lang}/messages.json`);
-      const json = await res.json();
-      i18nBundle = { uiLanguage: lang, messages: json };
+      if (!englishMessages) englishMessages = await fetchMessages(DEFAULT_UI_LANGUAGE);
+      const messages = lang === DEFAULT_UI_LANGUAGE ? englishMessages : await fetchMessages(lang);
+      i18nBundle = { uiLanguage: lang, messages: { ...englishMessages, ...messages } };
       document.documentElement.lang = lang;
-      desktopCfg.__lastAppLanguage = (store.sync.settings && store.sync.settings.appLanguage) || 'auto';
+      desktopCfg.__lastAppLanguage = lang;
+      document.dispatchEvent(new CustomEvent('pv-language-changed', { detail: { language: lang } }));
     } catch (e) {
       console.warn('[pv-shell] could not load locale', lang, e);
-      if (lang !== 'en') return loadI18n('en');
+      if (lang !== DEFAULT_UI_LANGUAGE) return loadI18n(DEFAULT_UI_LANGUAGE);
     }
     return i18nBundle;
   }
@@ -608,15 +637,7 @@
     store.sync = (loaded && loaded.data && loaded.data.sync) || {};
     if (store.local.__pvDesktop && typeof store.local.__pvDesktop === 'object') Object.assign(desktopCfg, store.local.__pvDesktop);
 
-    // Apply the English-menu preference once, including existing installs.
-    // Keep translation settings and vocabulary intact; later language choices
-    // remain possible through Settings.
-    if (!store.local.__pvEnglishMenuV1) {
-      store.sync.settings = { ...(store.sync.settings || store.local.settings || {}), appLanguage: 'en' };
-      store.local.__pvEnglishMenuV1 = true;
-      schedulePersist();
-    }
-
+    initializeMenuLanguage();
     seedLicense();
     await refreshDictStatus();
     await loadI18n();

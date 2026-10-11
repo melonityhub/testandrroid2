@@ -1,7 +1,7 @@
 # Checklist
 
 ## A) Before every release
-- [ ] `bash scripts/verify.sh` is green (CI runs it first: web bundle + patches, JS syntax, XML, manifest permissions, Java compile, HTTP-server tests).
+- [ ] `bash scripts/verify.sh` is green (CI runs it first: web bundle + patches, English-menu regression tests, JS syntax, XML, manifest permissions, Java compile, HTTP-server tests).
 - [ ] Actions run is green and the **"Check the APK"** step shows `package: name='app.proudvocab.android'`, `sdkVersion:'28'`, one `uses-permission` (INTERNET).
 - [ ] Tags/versions only go up (the workflow does this itself: `android-v<VERSION>.<run number>` — plus `-<branch-slug>` and marked *Pre-release* on non-main branches; versionCode = major*1000000 + minor*1000 + patch) - Android refuses to install a lower versionCode over a higher one.
 - [ ] The same keystore was used (otherwise the phone shows *App not installed* / `INSTALL_FAILED_UPDATE_INCOMPATIBLE`).
@@ -37,6 +37,8 @@ That is what the CI run and section D are for.
 
 ## D) On-device test list (POCO X3 Pro, ~5 minutes)
 - [ ] Install the APK; it opens to the splash and then the player. No permission dialogs appear.
+- [ ] Upgrade an existing Turkish-menu install (including the earlier English-menu update): menu tabs, settings and player labels are English, **App language = English**, with words/SRS and the translation target unchanged. Repeat on a Turkish/Persian-language phone.
+- [ ] Restart/reset settings: English remains the default. A later explicit language choice is honored and survives restart.
 - [ ] *Open video*: pick an `.mp4` **and** its `.srt` together → video plays, subtitle words are underlined/clickable.
 - [ ] Seek by dragging the progress bar; pause/resume; tap once to show controls, tap again to pause.
 - [ ] Tap a word → tooltip with translation (needs internet) → *Save* → it appears in the panel's list.

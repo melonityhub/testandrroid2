@@ -32,7 +32,7 @@ const clean = (s) => String(s || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' '
 function resolve(sql, word) { const r = openDict().prepare(sql).get(word); if (!r) return -1; const v = Object.values(r); return v[1] != null ? v[1] : v[0]; }
 
 const handlers = {
-  'pv:app-info': () => ({ version: '1.0.0-e2e', platform: 'android', arch: 'arm64', sdk: 30, device: 'POCO X3 Pro', locale: 'en-US', packaged: true }),
+  'pv:app-info': () => ({ version: '1.0.0-e2e', platform: 'android', arch: 'arm64', sdk: 30, device: 'POCO X3 Pro', locale: CFG.locale || 'en-US', packaged: true }),
   'pv:store-load': () => (fs.existsSync(STORE) ? { ok: true, data: JSON.parse(fs.readFileSync(STORE, 'utf8')) } : { ok: true, data: { local: { onboardingCompleted: true }, sync: {}, meta: {} } }),
   'pv:store-save': (o) => { fs.writeFileSync(STORE, JSON.stringify({ local: o.local, sync: o.sync, meta: { savedAt: Date.now() } })); log.saves++; return { ok: true }; },
   'pv:store-path': () => STORE,

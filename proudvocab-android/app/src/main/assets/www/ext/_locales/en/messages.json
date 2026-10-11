@@ -795,10 +795,10 @@
     "message": "{thisWeek} words added this week"
   },
   "settings_app_lang": {
-    "message": "Extension Language"
+    "message": "App language"
   },
   "settings_lang_auto": {
-    "message": "Automatic (Browser Default)"
+    "message": "English (default)"
   },
   "settings_color_title": {
     "message": "Translation color:"
@@ -2071,5 +2071,29 @@
   },
   "platform_local": {
     "message": "Local video"
+  },
+  "settings_prime_domain_title": {
+    "message": "Prime Video Redirection Domain"
+  },
+  "settings_prime_domain_default": {
+    "message": "Saved Domain (Default)"
+  },
+  "profile_sync_title": {
+    "message": "Cloud Sync"
+  },
+  "modal_btn_close": {
+    "message": "Close"
+  },
+  "profile_login_google": {
+    "message": "Sign in with Google"
+  },
+  "sync_complete": {
+    "message": "Sync complete"
+  },
+  "premium_modal_message": {
+    "message": "All features are available in the Android app."
+  },
+  "premium_smart_features_limit_desc": {
+    "message": "All smart features are available in the Android app."
   }
 }
