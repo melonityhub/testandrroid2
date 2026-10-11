@@ -7,7 +7,8 @@
   var BUS = null;
   try { BUS = window.top.__pvBus; } catch (e) { /* ignore */ }
 
-  var isFa = /^fa/i.test(String(navigator.language || ''));
+  // Follow the app menu language, not the phone's locale.
+  var isFa = /^fa/i.test(String(BUS ? BUS.i18n().uiLanguage : 'en'));
   var T = {
     title: ['Offline dictionary', 'دیکشنری آفلاین'],
     close: ['Close', 'بستن'],

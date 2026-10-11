@@ -6,7 +6,8 @@
  */
 (function () {
   'use strict';
-  var isFa = /^fa/i.test(String(navigator.language || ''));
+  // Follow the app menu language, not the phone's locale.
+  var isFa = /^fa/i.test(chrome.i18n.getUILanguage());
 
   function onReady(fn, tries) {
     tries = tries || 0;

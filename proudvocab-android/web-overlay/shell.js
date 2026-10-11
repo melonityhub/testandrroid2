@@ -608,6 +608,15 @@
     store.sync = (loaded && loaded.data && loaded.data.sync) || {};
     if (store.local.__pvDesktop && typeof store.local.__pvDesktop === 'object') Object.assign(desktopCfg, store.local.__pvDesktop);
 
+    // Apply the English-menu preference once, including existing installs.
+    // Keep translation settings and vocabulary intact; later language choices
+    // remain possible through Settings.
+    if (!store.local.__pvEnglishMenuV1) {
+      store.sync.settings = { ...(store.sync.settings || store.local.settings || {}), appLanguage: 'en' };
+      store.local.__pvEnglishMenuV1 = true;
+      schedulePersist();
+    }
+
     seedLicense();
     await refreshDictStatus();
     await loadI18n();
