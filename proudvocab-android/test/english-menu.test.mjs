@@ -227,6 +227,59 @@ test('English prerender preserves the hint icon and fails on missing translation
   assert.throws(() => renderEnglishPanel(vendor, { ...english, menu_title: undefined }), /Missing English UI message: menu_title/);
 });
 
+test('no Turkish UI strings are left anywhere in the shipped bundle', () => {
+  // Anything user-facing must be English. The only Turkish allowed to remain:
+  const allowlist = new Set([
+    // ...Prime Video's own Turkish-UI play/resume buttons: content selectors, never displayed
+    'button[aria-label*="Sürdür" i]', 'a[aria-label*="Sürdür" i]',
+    'button[aria-label*="Oynat" i]', 'a[aria-label*="Oynat" i]',
+    'sürdür', 'oynatmaya sürdür', 'şimdi izle', 'baştan izle', 'oynat',
+    // ...legacy CEFR colour-map lookup keys for words saved while the menu was Turkish
+    'DEYİM',
+    // ...language names in pickers, written in their own tongue by convention
+    'Türkçe', 'Français',
+  ]);
+  const looksTurkish = /[şŞğĞıİçÇöÖüÜ]|\b(kelime|kayded\w*|yükle\w*|silindi|eklendi|güncelle\w*|seçin|kapat\w*|tamam\w*|oynat|eşitle\w*|sözlük\w*|kullanıcı\w*|yede\w+|zaman\w*|tıkla\w*|satır\w*)\b/i;
+  const files = [];
+  const skip = /[\\/](?:_locales|langs|icons)[\\/]/;
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = new URL(entry.name + (entry.isDirectory() ? '/' : ''), dir);
+      if (skip.test(p.pathname)) continue;
+      if (entry.isDirectory()) walk(p);
+      else if (/\.(js|html|css)$/.test(entry.name)) files.push(p);
+    }
+  };
+  walk(www);
+  const offenders = [];
+  for (const file of files) {
+    let content = fs.readFileSync(file, 'utf8');
+    if (file.pathname.endsWith('player/player.js')) {
+      // The player still ships a Turkish translation block for users who pick
+      // Turkish as the menu language; it is inert while the menu is English.
+      content = content.replace(/\n {4}tr: \{[\s\S]*?\n {4}\},/, '\n');
+    }
+    for (const [, , literal] of content.matchAll(/(["'`])((?:\\.|(?!\1)[^\\\n])*?)\1/g)) {
+      if (literal.length > 400 || !looksTurkish.test(literal) || allowlist.has(literal)) continue;
+      offenders.push(`${file.pathname.split('/').pop()}: ${literal.slice(0, 90)}`);
+    }
+  }
+  assert.deepEqual(offenders, []);
+});
+
+test('panel.html option labels are English, not just the annotated spans', () => {
+  const html = readAsset('ext/sidepanel/panel.html');
+  const labels = [...html.matchAll(/\b(?:data-label|alt|aria-label)="([^"]*)"/g)].map((m) => m[1]);
+  assert.ok(labels.length > 20, 'expected many labels to check');
+  const turkish = labels.filter((label) =>
+    /[şŞğĞıİçÇöÖüÜ]/.test(label) || /\b(deyim|kelime|tümü|diğer|zor|geri|kapat|ara|temizle)\b/i.test(label));
+  assert.deepEqual(turkish, []);
+  assert.ok(html.includes('data-label="Idiom"'));
+  assert.ok(html.includes('data-label="Collocation"'));
+  assert.ok(html.includes('data-label="Time Remaining (Ascending)"'));
+  assert.ok(html.includes('data-label="Word (A → Z)"'));
+});
+
 test('the checked-in shell and player use the same menu language policy', () => {
   assert.equal(readAsset('shell.js'), source);
   const player = readAsset('player/player.js');
