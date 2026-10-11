@@ -1,12 +1,16 @@
 name: Android APK (build + release)
 
-# Every push to the main branch that touches the app builds + signs the APK and publishes a GitHub
-# Release automatically. The tag is created for you:  android-v<VERSION>.<run number>  (VERSION = proudvocab-android/VERSION,
-# e.g. android-v1.0.7). Put  [skip release]  in the commit message to only build without publishing.
+# Every push to ANY branch that touches the app builds + signs the APK and publishes a GitHub
+# Release automatically:
+#   * main / master      -> stable release, tag  android-v<VERSION>.<run number>   (e.g. android-v1.0.7)
+#   * any other branch   -> pre-release,  tag  android-v<VERSION>.<run number>-<branch slug>
+#                           (e.g. android-v1.0.8-arena-8af23411-testandrroid2), marked as prerelease
+#                           so "Latest" always stays on a main-branch build
+# Put  [skip release]  in the commit message to only build (artifact) without publishing.
 # Pull requests only build. You can also push your own tag (android-v2.0.0) or use "Run workflow".
 on:
   push:
-    branches: [main, master]
+    branches: ['**']
     tags: ['android-v*']
     paths:
       - 'proudvocab-android/**'
@@ -81,11 +85,22 @@ jobs:
         run: |
           BASE="$(tr -d ' \r\n' < VERSION)"
           RELEASE=false
+          RELEASE_SUFFIX=""
+          PRERELEASE=false
           if [[ "$GITHUB_REF" == refs/tags/android-v* ]]; then
             VERSION="${GITHUB_REF#refs/tags/android-v}"
             RELEASE=true
           elif [ "$EVENT" = "push" ]; then
-            VERSION="${BASE}.${GITHUB_RUN_NUMBER}"
+            if [[ "$GITHUB_REF_NAME" == "main" || "$GITHUB_REF_NAME" == "master" ]]; then
+              VERSION="${BASE}.${GITHUB_RUN_NUMBER}"
+            else
+              # every other branch gets its own (pre-)release; the branch slug keeps
+              # builds of parallel branches apart and makes the tag/name self-explanatory
+              SLUG="$(printf '%s' "$GITHUB_REF_NAME" | tr '/' '-' | tr -c 'a-zA-Z0-9._-' '-' | sed -E 's/-+/-/g; s/^-+//; s/-+$//' | cut -c1-40)"
+              RELEASE_SUFFIX="-$SLUG"
+              VERSION="${BASE}.${GITHUB_RUN_NUMBER}${RELEASE_SUFFIX}"
+              PRERELEASE=true
+            fi
             RELEASE=true
             case "$COMMIT_MSG" in *"[skip release]"*) RELEASE=false ;; esac
           elif [ "$EVENT" = "workflow_dispatch" ]; then
@@ -94,16 +109,20 @@ jobs:
           else
             VERSION="${BASE}.0-pr.${GITHUB_RUN_NUMBER}"
           fi
+          # anything with a suffix (branch builds, 2.0.0-beta, ...) is a prerelease
+          [[ "$VERSION" == *-* ]] && PRERELEASE=true
           if [[ "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
             # 1.0.7 -> 1000007 : always grows with the version, so every release installs over the previous one
             CODE=$(( BASH_REMATCH[1] * 1000000 + BASH_REMATCH[2] * 1000 + BASH_REMATCH[3] ))
           else
             echo "::error::Version '$VERSION' must look like 1.2.3"; exit 1
           fi
-          echo "version=$VERSION"   >> "$GITHUB_OUTPUT"
-          echo "code=$CODE"         >> "$GITHUB_OUTPUT"
-          echo "release=$RELEASE"   >> "$GITHUB_OUTPUT"
-          echo "Building $VERSION (versionCode $CODE, publish=$RELEASE)"
+          echo "version=$VERSION"      >> "$GITHUB_OUTPUT"
+          echo "code=$CODE"            >> "$GITHUB_OUTPUT"
+          echo "release=$RELEASE"      >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "suffix=$RELEASE_SUFFIX" >> "$GITHUB_OUTPUT"
+          echo "Building $VERSION (versionCode $CODE, publish=$RELEASE, prerelease=$PRERELEASE)"
 
       - name: Set up Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
@@ -147,10 +166,19 @@ jobs:
           TAG="android-v$V"
           APK="ProudVocab-$V.apk"
           SUM="$APK.sha256"
-          NOTES="ProudVocab for Android $V - one universal APK for Android 9+ (arm64-v8a, armeabi-v7a, x86, x86_64: the app has no native code, so the same file runs everywhere; POCO X3 Pro = arm64). Download the APK, open it and allow installs from your browser / file manager when Android asks. Commit: $GITHUB_SHA"
+          COMMON="one universal APK for Android 9+ (arm64-v8a, armeabi-v7a, x86, x86_64: the app has no native code, so the same file runs everywhere; POCO X3 Pro = arm64). Download the APK, open it and allow installs from your browser / file manager when Android asks. Commit: $GITHUB_SHA"
+          PRE=()
+          TITLE="ProudVocab $V"
+          if [[ "${{ steps.ver.outputs.suffix }}" != "" ]]; then
+            TITLE="ProudVocab $V (branch: $GITHUB_REF_NAME)"
+            NOTES="ProudVocab for Android $V - automatic build of the branch **$GITHUB_REF_NAME** (pre-release). $COMMON"
+          else
+            NOTES="ProudVocab for Android $V - $COMMON"
+          fi
+          [[ "${{ steps.ver.outputs.prerelease }}" == "true" ]] && PRE=(--prerelease)
           if gh release view "$TAG" > /dev/null 2>&1; then
             gh release upload "$TAG" "$APK" "$SUM" --clobber
           else
-            gh release create "$TAG" "$APK" "$SUM" --target "$GITHUB_SHA" --title "ProudVocab $V" --notes "$NOTES"
+            gh release create "$TAG" "$APK" "$SUM" --target "$GITHUB_SHA" --title "$TITLE" --notes "$NOTES" "${PRE[@]}"
           fi
           echo "Released: https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"

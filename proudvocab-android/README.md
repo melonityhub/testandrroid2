@@ -23,8 +23,10 @@
    .github/workflows/android.yml
    proudvocab-android/...
    ```
-2. **هر پوشی روی شاخهٔ main/master** که به فایل‌های اپ دست بزند، خودش:
-   بیلد می‌گیرد ← APK را امضا و بررسی می‌کند ← **تگ می‌سازد** (`android-v1.0.<شماره‌ی اجرا>`، مثلاً `android-v1.0.7`) ← **Release** با APK و فایل `.sha256` منتشر می‌کند.
+2. **هر پوشی روی هر شاخه‌ای** (main/master یا هر برنچ دیگر) که به فایل‌های اپ دست بزند، خودش:
+   بیلد می‌گیرد ← APK را امضا و بررسی می‌کند ← **تگ می‌سازد** ← **Release** با APK و فایل `.sha256` منتشر می‌کند.
+   * **main/master**: Release پایدار با تگ `android-v1.0.<شماره‌ی اجرا>` (مثلاً `android-v1.0.7`)؛ گزینهٔ «Latest» همیشه روی این شاخه‌ها می‌ماند.
+   * **بقیهٔ شاخه‌ها**: Release از نوع *Pre-release* با تگ `android-v1.0.<شماره‌ی اجرا>-<نام شاخه>` (مثلاً `android-v1.0.8-arena-8af23411`) تا بیلد هر برنچ جدا و قابل‌تشخیص باشد؛ چون شمارهٔ نسخهٔ همهٔ برنچ‌ها صعودی است، روی هم قابل نصب‌اند.
    * نسخهٔ پایه از فایل `VERSION` می‌آید (`1.0` ← برای نسخهٔ ۲ آن را `2.0` کنید).
    * اگر نمی‌خواهید Release ساخته شود، در پیام کامیت بنویسید `[skip release]`.
    * Pull Request فقط بیلد می‌کند.
@@ -94,5 +96,7 @@ proudvocab-android/
 Android 9+ port of `proudvocab-desktop` (video + subtitles, tappable words, CEFR, SRS, games, Anki export) with **every feature unlocked**
 (license / premium logic removed, no 50-word cap) and an **importable offline dictionary** (FastDic-style SQLite, same schema as
 `dictionaryproject`). Plain Java + WebView, **zero third-party dependencies**; only the `INTERNET` permission - files are opened with the
-system picker (SAF). Push a tag `android-vX.Y.Z` and GitHub Actions builds a signed APK and publishes a Release.
+system picker (SAF). Every push to **any branch** that touches the app makes GitHub Actions build a signed APK and
+publish a Release automatically - `main`/`master` produce stable releases (`android-v1.0.<run>`), other branches
+produce prereleases tagged `android-v1.0.<run>-<branch-slug>`; push a tag `android-vX.Y.Z` for a manual version.
 See [`CHECKLIST.md`](CHECKLIST.md) for the release checklist, the on-device test list and CI troubleshooting.

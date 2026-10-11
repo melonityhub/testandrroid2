@@ -73,6 +73,14 @@ app.whenReady().then(async () => {
     width: 393, height: 780, useContentSize: true, show: true,
     webPreferences: { preload: path.join(__dirname, 'fake-native.cjs'), contextIsolation: false, sandbox: false, nodeIntegration: false, backgroundThrottling: false },
   });
+  /* Emulate a real Android phone: the window is already phone-sized (393x780), but
+     the vendor panel code also sniffs the User-Agent before switching to its
+     "mobile view". Electron's default UA doesn't match, which is how the
+     blank-panel-on-Android bug slipped past this test - so force a WebView UA. */
+  win.webContents.setUserAgent(
+    'Mozilla/5.0 (Linux; Android 13; POCO X3 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.122 Mobile Safari/537.36'
+  );
+
   const errors = [];
   win.webContents.on('console-message', (ev, level, message, line, source) => {
     const msg = ev && ev.message !== undefined ? ev.message : message;
@@ -96,6 +104,19 @@ app.whenReady().then(async () => {
     check('boot splash removed', await waitFor(`!document.getElementById('boot')`, 8000));
     check('chrome.* shim running in the player frame', await ev(`!!${P}.chrome && !!${P}.PrimeVocabCommon`));
     check('i18n bundle loaded', await ev(`Object.keys(__pvBus.i18n().messages).length>100`));
+
+    /* the vendor panel sniffs UA + width and on a "phone" hides the ENTIRE tab UI
+       (Subtitles / Dictionary / Study / Settings) behind a settings-only screen;
+       here the panel IS the app, so it must always render the full UI */
+    console.log('\n[android phone detection]');
+    check('Android UA does NOT blank the panel (no sniffed mobile-view)',
+      await ev(`!${PN}.document.body.classList.contains('is-mobile-view') && !${PN}.document.body.classList.contains('is-mobile-ui')`));
+    check('the tab bar (Subtitles / Dictionary / Study) is rendered and visible',
+      await ev(`(()=>{const w=${PN};return ['tab-subtitle','tab-archive','tab-review'].every(id=>{const e=w.document.getElementById(id);if(!e)return!1;const s=w.getComputedStyle(e),p=w.getComputedStyle(e.parentElement);return s.display!=='none'&&s.visibility!=='hidden'&&p.display!=='none'})})()`));
+    check('panel header + content not hidden by the phone-mode CSS',
+      await ev(`(()=>{const w=${PN},d=w.document;const h=d.querySelector('.header'),p=d.querySelector('.panel');return (!h||w.getComputedStyle(h).display!=='none')&&(!p||w.getComputedStyle(p).display!=='none')})()`));
+    check('panel connected to the background port (subtitle updates can arrive)',
+      await waitFor(`!!${PN}.eval('port')`, 8000));
 
     /* --------------------------------------------------------- premium */
     console.log('\n[license / premium removal]');
@@ -122,6 +143,21 @@ app.whenReady().then(async () => {
     if (process.env.PV_PROBE) console.log('PROBE:', JSON.stringify(await ev(process.env.PV_PROBE), null, 1));
     await shot('01-portrait-video');
 
+    /* ------------------------------------------------------ playback speed */
+    console.log('\n[playback speed picker]');
+    await ev(`${P}.document.getElementById('btn-rate').click()`);
+    check('tapping the rate button opens the speed menu',
+      await waitFor(`(()=>{const m=${P}.document.getElementById('pv-rate-menu');return m&&!m.classList.contains('pv-hidden')})()`, 4000));
+    await ev(`[...${P}.document.querySelectorAll('#pv-rate-menu .pv-rate-opt')].find((b)=>b.dataset.rate==='1.5').click()`);
+    check('choosing 1.5x speeds the video up',
+      await waitFor(`Math.abs(${P}.document.getElementById('pv-video').playbackRate-1.5)<0.01`, 4000));
+    await ev(`${P}.document.getElementById('btn-rate').click()`);
+    await ev(`[...${P}.document.querySelectorAll('#pv-rate-menu .pv-rate-opt')].find((b)=>b.dataset.rate==='1').click()`);
+    check('...and 1x brings the speed back to normal',
+      await waitFor(`Math.abs(${P}.document.getElementById('pv-video').playbackRate-1)<0.01`, 4000));
+    check('rate button label is back to 1x',
+      await ev(`${P}.document.getElementById('btn-rate').textContent.trim()==='1×'`));
+
     /* ----------------------------------------- word tap -> Google (no dict) */
     console.log('\n[translation: online]');
     await ev(`(()=>{const w=${P}.document.querySelectorAll('#primevocab-subtitle-overlay .primevocab-word-chip')[0];w.dispatchEvent(new MouseEvent('mouseenter',{bubbles:false}));})()`);
@@ -141,6 +177,8 @@ app.whenReady().then(async () => {
     check('upgrade / profile UI hidden', await ev(`['premium-modal','profile-btn','premium-welcome-modal'].every(id=>{const e=${PN}.document.getElementById(id);return !e||${PN}.getComputedStyle(e).display==='none'})`));
     await ev(`${PN}.openMenuDrawer && ${PN}.openMenuDrawer()`);
     await sleep(600);
+    check('Settings drawer opens and its content is visible',
+      await ev(`(()=>{const w=${PN},d=w.document;const o=d.getElementById('menuOverlay');return !!(o&&o.classList.contains('open')&&w.getComputedStyle(o).display!=='none'&&d.querySelectorAll('.settings-block, .settings-group, .settings-section').length)})()`));
     check('settings: nothing is marked premium-locked', await ev(`${PN}.document.querySelectorAll('.premium-locked').length===0`));
     check('settings: smart toggles are enabled', await ev(`(()=>{const ids=['auto-slowmo-toggle','auto-rewind-toggle','shadowing-toggle'];const els=ids.map(i=>${PN}.document.getElementById(i)).filter(Boolean);return els.length===0||els.every(e=>!e.disabled)})()`));
     await ev(`${PN}.closeMenuDrawer && ${PN}.closeMenuDrawer()`);

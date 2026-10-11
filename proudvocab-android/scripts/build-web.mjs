@@ -112,7 +112,18 @@ patch('ext/sidepanel/panel_archive.js', /(\w)="FREE"!==(\w)\|\|(\w)<50/, '$1=!0'
 patch('ext/sidepanel/panel_subtitles.js', /"FREE"===(\w)&&(\w)\.length>=50/, '!1&&$2.length>=50');
 patch('ext/sidepanel/panel_utils.js', /function showPremiumModal\((\w),(\w)\)\{/, 'function showPremiumModal($1,$2){return;');
 
-/* ------------------------------------------------- 5. player (touch etc.) */
+/* ------------------------------------------- 5. panel: no sniffed phone UI */
+console.log('panel: keeping the full desktop UI on phones');
+// The vendor panel ships a "standalone mobile" mode: when the User-Agent looks like a
+// phone AND the frame is <= 600px wide, checkIsMobileUI() tags the body with
+// .is-mobile-view, which hides the ENTIRE tab UI (Subtitles / Dictionary / Study /
+// Settings) in favor of a settings-only screen, and also skips the background port,
+// so no subtitles ever arrive. That mode is meant for the browser extension's
+// standalone page; in this app the panel IS the app, so on every Android phone it
+// booted into a blank panel. Force the detection off.
+patch('ext/sidepanel/panel_core.js', 'function checkIsMobileUI(){', 'function checkIsMobileUI(){return!1;');
+
+/* ------------------------------------------------- 6. player (touch etc.) */
 console.log('adapting the player for touch / content URIs');
 patch('player/player.js', String.raw`String(path).split(/[\\/]/).pop()`, 'bridge.nameOf(path)', 2);
 patch('player/player.js', String.raw`String(p).split(/[\\/]/).pop()`, 'bridge.nameOf(p)', 1);
@@ -128,7 +139,77 @@ patch('player/player.js', 'through the pv-media:// protocol', 'through the local
 patch('player/player.js', 'Drop a video file here, or pick one from disk.', 'Pick a video from your phone.');
 patch('player/player.js', 'فایل ویدیو را اینجا رها کنید یا از دیسک انتخاب کنید.', 'یک ویدیو از حافظهٔ گوشی انتخاب کنید.');
 
-/* -------------------------------------------------------- 6. self checks */
+// The rate button only ever cycled FORWARD through 0.5x..2x (clamped at the top);
+// the way back to 1x on desktop is the app's Playback menu, which the phone build
+// has no replacement for - so once a speed was picked it could never be undone.
+// Give the button a real picker with every rate (incl. 1x = normal).
+patch('player/player.js', "cc_title: 'Subtitles',", "speed_title: 'Playback speed', cc_title: 'Subtitles',");
+patch('player/player.js', "cc_title: 'زیرنویس", "speed_title: 'سرعت پخش', cc_title: 'زیرنویس");
+patch('player/player.js', "cc_title: 'Altyazılar',", "speed_title: 'Oynatma hızı', cc_title: 'Altyazılar',");
+patch('player/player.js', "$('btn-rate').addEventListener('click', () => cycleRate(1));",
+  "$('btn-rate').addEventListener('click', (e) => { e.stopPropagation(); toggleRateMenu(); });");
+patch('player/player.js',
+  `  function cycleRate(dir) {
+    let i = RATES.indexOf(state.rate);
+    if (i < 0) i = RATES.indexOf(1);
+    i = Math.max(0, Math.min(RATES.length - 1, i + dir));
+    setRate(RATES[i]);
+    toast(RATES[i] + '×', null, 900);
+  }`,
+  `  function cycleRate(dir) {
+    let i = RATES.indexOf(state.rate);
+    if (i < 0) i = RATES.indexOf(1);
+    i = Math.max(0, Math.min(RATES.length - 1, i + dir));
+    setRate(RATES[i]);
+    toast(RATES[i] + '×', null, 900);
+  }
+  /* phone build: the desktop app resets the speed via its Playback menu; here the
+     rate button opens a picker with every rate so 1x (normal) is always one tap away */
+  function rateMenuEl() {
+    let m = $('pv-rate-menu');
+    if (m) return m;
+    m = document.createElement('div');
+    m.id = 'pv-rate-menu';
+    m.className = 'pv-popup pv-hidden';
+    const head = document.createElement('div');
+    head.className = 'pop-head';
+    const title = document.createElement('span');
+    title.textContent = t('speed_title');
+    const x = document.createElement('button');
+    x.className = 'pop-x';
+    x.textContent = '✕';
+    x.addEventListener('click', closePopups);
+    head.appendChild(title);
+    head.appendChild(x);
+    const grid = document.createElement('div');
+    grid.className = 'pop-body pv-rate-grid';
+    for (const r of RATES) {
+      const b = document.createElement('button');
+      b.className = 'mini pv-rate-opt';
+      b.dataset.rate = String(r);
+      b.addEventListener('click', () => { setRate(r); closePopups(); toast(r + '×', null, 900); });
+      grid.appendChild(b);
+    }
+    m.appendChild(head);
+    m.appendChild(grid);
+    $('pv-controls').appendChild(m);
+    return m;
+  }
+  function toggleRateMenu() {
+    const m = rateMenuEl();
+    const open = m.classList.contains('pv-hidden');
+    closePopups();
+    if (!open) return;
+    m.querySelectorAll('.pv-rate-opt').forEach((b) => {
+      const on = parseFloat(b.dataset.rate) === state.rate;
+      b.classList.toggle('active', on);
+      b.textContent = b.dataset.rate + '×' + (on ? ' ✓' : '');
+    });
+    m.classList.remove('pv-hidden');
+    showControls(true);
+  }`);
+
+/* -------------------------------------------------------- 7. self checks */
 console.log('verifying output');
 const problems = [];
 function walk(dir) {
