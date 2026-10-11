@@ -3,7 +3,7 @@
 ## A) Before every release
 - [ ] `bash scripts/verify.sh` is green (CI runs it first: web bundle + patches, JS syntax, XML, manifest permissions, Java compile, HTTP-server tests).
 - [ ] Actions run is green and the **"Check the APK"** step shows `package: name='app.proudvocab.android'`, `sdkVersion:'28'`, one `uses-permission` (INTERNET).
-- [ ] Tags/versions only go up (the workflow does this itself: `android-v<VERSION>.<run number>`; versionCode = major*1000000 + minor*1000 + patch) - Android refuses to install a lower versionCode over a higher one.
+- [ ] Tags/versions only go up (the workflow does this itself: `android-v<VERSION>.<run number>` — plus `-<branch-slug>` and marked *Pre-release* on non-main branches; versionCode = major*1000000 + minor*1000 + patch) - Android refuses to install a lower versionCode over a higher one.
 - [ ] The same keystore was used (otherwise the phone shows *App not installed* / `INSTALL_FAILED_UPDATE_INCOMPATIBLE`).
 
 ## B) What was verified for this build
