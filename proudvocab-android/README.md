@@ -71,7 +71,7 @@
 * پیداکردن خودکار زیرنویس کنار ویدیو فقط وقتی کار می‌کند که پوشه را با «پوشه به‌عنوان پلی‌لیست» داده باشید؛ وگرنه ویدیو و `.srt` را
   **با هم** در یک انتخاب بزنید یا از دکمهٔ زیرنویس استفاده کنید.
 * همگام‌سازی Google Drive مخصوص افزونهٔ مرورگر بود و در این نسخه وجود ندارد؛ برای بکاپ از بخش **آرشیو** خروجی JSON/Anki بگیرید (محل ذخیره را خودتان انتخاب می‌کنید).
-* زبان رابط پنل (از خود افزونه): English / Türkçe / Deutsch / Français / Español. پلیر فارسی هم دارد.
+* **زبان پیش‌فرض منو، پنل و پلیر انگلیسی است** و به زبان گوشی یا زبان ترجمه وابسته نیست. هنگام نصب این به‌روزرسانی، تنظیم زبان نسخه‌های قبلی یک‌بار به English اصلاح می‌شود؛ لغت‌ها، مرور SRS و زبان ترجمه حفظ می‌شوند. انتخاب دستی زبان دیگر از **Menu → Settings → App language** همچنان ممکن است (English / Turkish / German / French / Spanish).
 * دکمهٔ Back: ابتدا دیالوگ/صفحهٔ باز را می‌بندد، بعد تمام‌صفحه، بعد خروج.
 * تمام‌صفحه صفحه را افقی می‌کند و صفحه تا زمان پخش روشن می‌ماند.
 
@@ -81,8 +81,10 @@ proudvocab-android/
   app/src/main/java/...        Java (بدون هیچ وابستگی خارجی): MainActivity, LocalServer, NativeBridge, Dictionary, ...
   app/src/main/assets/www/     رابط وب (تولیدشده توسط scripts/build-web.mjs از proudvocab-desktop + web-overlay)
   web-overlay/                 تغییرات مخصوص اندروید (پل JS، شِل موبایلی، CSS، صفحهٔ دیکشنری، استاب لایسنس)
-  scripts/build-web.mjs        تولید assets + پچ‌های حذف لایسنس (اگر یکی جا نیفتد بیلد خطا می‌دهد)
-  scripts/verify.sh            چک‌لیست پیش از بیلد (در CI هم اجرا می‌شود)
+  scripts/build-web.mjs        تولید assets + پچ‌های حذف لایسنس و پیش‌فرض انگلیسی (اگر یکی جا نیفتد بیلد خطا می‌دهد)
+  scripts/english-ui.mjs       تولید متن‌های پیش‌فرض انگلیسی پنل، با حفظ امکان تغییر زبان
+  test/english-menu.test.mjs   تست مهاجرت تنظیمات و کامل بودن ترجمه‌های منو
+  scripts/verify.sh            چک‌لیست پیش از بیلد + تست‌های زبان (در CI هم اجرا می‌شود)
   scripts/jtest, e2e/          تست سرور روی JVM و تست سرتاسری در Chromium
   keystore/                    کلید امضا
 ../.github/workflows/android.yml
@@ -99,4 +101,8 @@ Android 9+ port of `proudvocab-desktop` (video + subtitles, tappable words, CEFR
 system picker (SAF). Every push to **any branch** that touches the app makes GitHub Actions build a signed APK and
 publish a Release automatically - `main`/`master` produce stable releases (`android-v1.0.<run>`), other branches
 produce prereleases tagged `android-v1.0.<run>-<branch-slug>`; push a tag `android-vX.Y.Z` for a manual version.
+English is the default menu/player language, independent of the phone locale and translation target. Existing installs are
+repaired once (including installs with the previous migration marker); vocabulary, SRS and translation preferences are retained.
+Later explicit language choices remain available. Run `node --test test/*.test.mjs` for menu regression tests; CI runs them
+as part of `scripts/verify.sh`.
 See [`CHECKLIST.md`](CHECKLIST.md) for the release checklist, the on-device test list and CI troubleshooting.

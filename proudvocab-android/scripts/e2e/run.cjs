@@ -19,6 +19,15 @@ fs.mkdirSync(SHOTS, { recursive: true });
 
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 app.commandLine.appendSwitch('no-sandbox');
+app.commandLine.appendSwitch('lang', 'tr-TR');
+
+// Reproduce an existing install whose first English migration already ran,
+// but whose menu preference is still Turkish. Upgrading must repair the menu
+// without touching words or the Persian translation target.
+fs.writeFileSync(path.join(DATA, 'store.json'), JSON.stringify({
+  local: { onboardingCompleted: true, __pvEnglishMenuV1: true, savedWords: [{ word: 'hello', translation: 'سلام', cefr: 'A1', timestamp: 1 }] },
+  sync: { settings: { appLanguage: 'tr', sourceLang: 'en', targetLang: 'fa', local: { sourceLang: 'en', targetLang: 'fa' } } },
+}));
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml' };
 const results = [];
@@ -64,7 +73,7 @@ app.whenReady().then(async () => {
   const port = srv.address().port;
   const origin = `http://127.0.0.1:${port}`;
   process.env.PV_E2E_CFG = JSON.stringify({
-    fixtures: FIX, data: DATA, sampleDb: SAMPLE,
+    fixtures: FIX, data: DATA, sampleDb: SAMPLE, locale: 'tr-TR',
     dictionaryJava: path.join(ROOT, 'app/src/main/java/app/proudvocab/android/Dictionary.java'),
     mediaBase: `${origin}/pvmedia/${TOKEN}/`,
   });
@@ -104,6 +113,16 @@ app.whenReady().then(async () => {
     check('boot splash removed', await waitFor(`!document.getElementById('boot')`, 8000));
     check('chrome.* shim running in the player frame', await ev(`!!${P}.chrome && !!${P}.PrimeVocabCommon`));
     check('i18n bundle loaded', await ev(`Object.keys(__pvBus.i18n().messages).length>100`));
+
+    console.log('\n[English menu on a Turkish phone / existing installation]');
+    check('shell, player and panel all use English after the V1 repair',
+      await waitFor(`__pvBus.i18n().uiLanguage==='en' && ${PN}.i18nInitialized && ${PN}.document.documentElement.lang==='en' && ${P}.document.documentElement.lang==='en' && ${PN}.document.querySelector('[data-i18n="menu_title"]').textContent==='Menu'`, 8000));
+    check('English is selected in the app language menu',
+      await waitFor(`${PN}.document.getElementById('app-lang-select').value==='en' && ${PN}.document.getElementById('appLangLabel').textContent==='English'`, 4000));
+    check('every panel label, tooltip and placeholder has an English message',
+      await ev(`(()=>{const w=${PN};return [...w.document.querySelectorAll('[data-i18n],[data-i18n-title],[data-i18n-placeholder]')].every(e=>w.getMessage(e.getAttribute('data-i18n')||e.getAttribute('data-i18n-title')||e.getAttribute('data-i18n-placeholder')))})()`));
+    check('menu repair preserves words and Persian translation preferences',
+      await ev(`(()=>{const s=__pvBus.shell.store;return s.local.savedWords[0].word==='hello' && s.local.savedWords[0].translation==='سلام' && s.sync.settings.targetLang==='fa' && s.sync.settings.local.targetLang==='fa' && s.local.__pvEnglishMenuV2===true})()`));
 
     /* the vendor panel sniffs UA + width and on a "phone" hides the ENTIRE tab UI
        (Subtitles / Dictionary / Study / Settings) behind a settings-only screen;
@@ -257,6 +276,23 @@ app.whenReady().then(async () => {
     await sleep(500);
     check('portrait: panel is below the video', await ev(`(()=>{const s=document.getElementById('stage').getBoundingClientRect(),p=document.getElementById('panel-wrap').getBoundingClientRect();return p.top>=s.bottom-2&&p.height>200})()`));
     await shot('07-portrait-final');
+
+    /* Explicit later choices must work; the upgrade repair must not force the
+       language back to English on every boot. Player labels follow the shell. */
+    console.log('\n[manual language choice + restart]');
+    await ev(`${PN}.document.querySelector('#appLangMenu [data-val="tr"]').click()`);
+    check('a manual choice updates both panel and player',
+      await waitFor(`__pvBus.i18n().uiLanguage==='tr' && ${PN}.document.querySelector('[data-i18n="menu_title"]').textContent==='Menü' && ${P}.document.querySelector('[data-t="btn_open_video"]').textContent==='Video aç'`, 8000));
+    await ev(`window.__pvFlush()`);
+    await sleep(500);
+    await win.loadURL(origin + '/index.html');
+    check('the manual language choice survives restart after the one-time repair',
+      await waitFor(`window.__pvBus_ready && ${PN}.i18nInitialized && __pvBus.i18n().uiLanguage==='tr' && ${PN}.document.querySelector('[data-i18n="menu_title"]').textContent==='Menü'`, 10000));
+    await ev(`${PN}.document.querySelector('#appLangMenu [data-val="en"]').click()`);
+    check('choosing English restores English panel and player labels',
+      await waitFor(`__pvBus.i18n().uiLanguage==='en' && ${PN}.document.querySelector('[data-i18n="menu_title"]').textContent==='Menu' && ${P}.document.querySelector('[data-t="btn_open_video"]').textContent==='Open video'`, 8000));
+    check('changing menu language leaves vocabulary and translation language intact',
+      await ev(`__pvBus.shell.store.local.savedWords.length===75 && __pvBus.shell.store.sync.settings.targetLang==='fa'`));
   } catch (e) {
     check('test run completed without a crash', false, String(e && e.stack || e));
   }
