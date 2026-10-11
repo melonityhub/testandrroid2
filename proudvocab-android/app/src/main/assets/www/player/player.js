@@ -47,7 +47,7 @@
       empty_hint: 'Pick a video from your phone. Add an <b>.srt</b> subtitle and every word in it becomes clickable – with translation, CEFR level and spaced-repetition review.',
       btn_open_video: 'Open video', btn_open_subtitle: 'Open SRT', btn_open_folder: 'Folder as playlist',
       empty_drop: '…or drop video + subtitle files anywhere in this window',
-      cc_title: 'Subtitles', cc_load: 'Load SRT / VTT…', cc_off: 'Off', cc_lang: 'Subtitle language',
+      speed_title: 'Playback speed', cc_title: 'Subtitles', cc_load: 'Load SRT / VTT…', cc_off: 'Off', cc_lang: 'Subtitle language',
       cc_delay: 'Sync offset', cc_delay_reset: 'reset', cc_auto: 'Auto-load a matching .srt next to the video',
       cc_show_plain: 'Simple caption (no clickable words)',
       files_title: 'Files & playlist', files_playlist: 'Playlist', files_recent: 'Recent',
@@ -75,7 +75,7 @@
       empty_hint: 'یک ویدیو از حافظهٔ گوشی انتخاب کنید. یک زیرنویس <b>.srt</b> اضافه کنید تا هر کلمه‌ی آن قابل کلیک شود – با ترجمه، سطح CEFR و مرور با تکرار فاصله‌دار.',
       btn_open_video: 'باز کردن ویدیو', btn_open_subtitle: 'باز کردن SRT', btn_open_folder: 'پوشه به‌عنوان پلی‌لیست',
       empty_drop: '…یا فایل ویدیو و زیرنویس را هر جای این پنجره رها کنید',
-      cc_title: 'زیرنویس‌ها', cc_load: 'بارگذاری SRT / VTT…', cc_off: 'خاموش', cc_lang: 'زبان زیرنویس',
+      speed_title: 'سرعت پخش', cc_title: 'زیرنویس‌ها', cc_load: 'بارگذاری SRT / VTT…', cc_off: 'خاموش', cc_lang: 'زبان زیرنویس',
       cc_delay: 'جابه‌جایی زمانی زیرنویس', cc_delay_reset: 'صفر', cc_auto: 'بارگذاری خودکار .srt هم‌نام کنار ویدیو',
       cc_show_plain: 'زیرنویس ساده (بدون کلمه‌های کلیک‌شدنی)',
       files_title: 'فایل‌ها و پلی‌لیست', files_playlist: 'پلی‌لیست', files_recent: 'اخیر',
@@ -103,7 +103,7 @@
       empty_hint: 'Buraya bir video dosyası bırakın ya da diskten seçin. Bir <b>.srt</b> altyazı ekleyin; içindeki her kelime tıklanabilir olsun – çeviri, CEFR seviyesi ve aralıklı tekrar ile.',
       btn_open_video: 'Video aç', btn_open_subtitle: 'SRT aç', btn_open_folder: 'Klasörü liste yap',
       empty_drop: '…ya da video + altyazı dosyalarını bu pencerenin herhangi bir yerine bırakın',
-      cc_title: 'Altyazılar', cc_load: 'SRT / VTT yükle…', cc_off: 'Kapalı', cc_lang: 'Altyazı dili',
+      speed_title: 'Oynatma hızı', cc_title: 'Altyazılar', cc_load: 'SRT / VTT yükle…', cc_off: 'Kapalı', cc_lang: 'Altyazı dili',
       cc_delay: 'Senkron kaydırma', cc_delay_reset: 'sıfırla', cc_auto: 'Videonun yanındaki eşleşen .srt dosyasını otomatik yükle',
       cc_show_plain: 'Basit altyazı (tıklanabilir kelimeler olmadan)',
       files_title: 'Dosyalar ve liste', files_playlist: 'Oynatma listesi', files_recent: 'Son kullanılanlar',
@@ -544,6 +544,51 @@
     setRate(RATES[i]);
     toast(RATES[i] + '×', null, 900);
   }
+  /* phone build: the desktop app resets the speed via its Playback menu; here the
+     rate button opens a picker with every rate so 1x (normal) is always one tap away */
+  function rateMenuEl() {
+    let m = $('pv-rate-menu');
+    if (m) return m;
+    m = document.createElement('div');
+    m.id = 'pv-rate-menu';
+    m.className = 'pv-popup pv-hidden';
+    const head = document.createElement('div');
+    head.className = 'pop-head';
+    const title = document.createElement('span');
+    title.textContent = t('speed_title');
+    const x = document.createElement('button');
+    x.className = 'pop-x';
+    x.textContent = '✕';
+    x.addEventListener('click', closePopups);
+    head.appendChild(title);
+    head.appendChild(x);
+    const grid = document.createElement('div');
+    grid.className = 'pop-body pv-rate-grid';
+    for (const r of RATES) {
+      const b = document.createElement('button');
+      b.className = 'mini pv-rate-opt';
+      b.dataset.rate = String(r);
+      b.addEventListener('click', () => { setRate(r); closePopups(); toast(r + '×', null, 900); });
+      grid.appendChild(b);
+    }
+    m.appendChild(head);
+    m.appendChild(grid);
+    $('pv-controls').appendChild(m);
+    return m;
+  }
+  function toggleRateMenu() {
+    const m = rateMenuEl();
+    const open = m.classList.contains('pv-hidden');
+    closePopups();
+    if (!open) return;
+    m.querySelectorAll('.pv-rate-opt').forEach((b) => {
+      const on = parseFloat(b.dataset.rate) === state.rate;
+      b.classList.toggle('active', on);
+      b.textContent = b.dataset.rate + '×' + (on ? ' ✓' : '');
+    });
+    m.classList.remove('pv-hidden');
+    showControls(true);
+  }
   function setVolume(v) {
     state.volume = Math.max(0, Math.min(1, v));
     video.volume = state.volume;
@@ -746,7 +791,7 @@
     $('btn-prev-cue').addEventListener('click', () => cueStep(-1));
     $('btn-next-cue').addEventListener('click', () => cueStep(1));
     $('btn-replay-cue').addEventListener('click', replayCue);
-    $('btn-rate').addEventListener('click', () => cycleRate(1));
+    $('btn-rate').addEventListener('click', (e) => { e.stopPropagation(); toggleRateMenu(); });
     $('btn-mute').addEventListener('click', () => toggleMute());
     $('pv-volume').addEventListener('input', (e) => setVolume(parseFloat(e.target.value)));
     $('btn-fullscreen').addEventListener('click', toggleFullscreen);

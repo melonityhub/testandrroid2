@@ -20,6 +20,13 @@ html, body { touch-action: manipulation; -webkit-user-select: none; user-select:
 .empty-actions .btn { padding: 11px 16px; }
 .pv-popup { max-width: 94vw; }
 
+/* Speed picker: the phone has no app menu, so the rate button opens a grid with
+   every available speed - including 1x to go back to normal (see player.js). */
+.pv-rate-menu { width: 242px; }
+.pv-rate-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; }
+.pv-rate-opt { min-width: 0; padding: 9px 2px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.pv-rate-opt.active { background: var(--accent, #6366f1); border-color: transparent; color: #fff; }
+
 /* Subtitles: the desktop default (22px) is far too big for a ~390px wide stage.
    --pv-sub-scale shrinks it according to the player width (portrait / landscape /
    fullscreen); the font-size slider in the player settings still works. */
